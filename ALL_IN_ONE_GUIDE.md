@@ -303,17 +303,17 @@ To deliver intuitive, instantaneous visual feedback to the locomotive pilot and 
   - 🟢 **SAFE**: Green bounding box (`BGR: (50, 220, 50)`), with standard badge: `[Person (89%)]`.
   - **Ground-Contact Indicator**: Draws a high-contrast anchor bullseye circle at $(x_{\text{mid}}, y_{\text{max}})$ denoting the exact physical point evaluated by the spatial clearance engine.
 
-#### 2. Glassmorphic Head-Up Display (HUD) Telemetry Overlay:
+#### 2. Clean Old-School Locomotive HUD Top Header:
 
-- **Top Status Telemetry Bar** (Dark navy-slate glassmorphism header, 88% opacity):
-  - **Left**: System branding `DRISHTI KAVACH` and `ATP OPTICAL PERCEPTION`.
-  - **Center**: Large Dynamic Safety State Badge:
-    - 🔴 **EMERGENCY: OBSTACLE IN TRACK [BRAKE]**
-    - 🟡 **CAUTION: CLEARANCE BREACH**
-    - 🟢 **TRACK CLEAR - ALL CLEAR**
-  - **Right**: Real-time operational metrics displaying **Live FPS**, **Sensor Mode** (`DAYLIGHT RGB` or `850nm ACTIVE IR CCTV`), and **Optical Weather Mode** (`CLEAR ATMOSPHERE` / `DCP DEFOG (75%)` / `CLAHE ENHANCE`).
-- **Bottom-Left Diagnostics Telemetry Card**:
-  - Real-time readout of Track Geometry Lock state (`TRACK GEOMETRY: LOCKED`), total counts of active Critical vs Warning threats, and an itemized list of the top detected hazards with confidence percentages and lateral distances.
+- **Top Status Telemetry Bar** (Deep charcoal strip with hairline borders, 90% opacity):
+  - **Left**: `[ DRISHTI KAVACH ]` branding with real-time colored pilot lamp indicator (Green / Amber / Red).
+  - **Center**: Dynamic High-Contrast Tactical Alert Box:
+    - 🔴 `[ ! EMERGENCY BRAKE : OBSTACLE IN TRACK ! ]` (Solid red with white text)
+    - 🟡 `[ CAUTION : CLEARANCE ENVELOPE BREACH ]` (Gold/amber with white text)
+    - 🟢 `[ TRACK STATUS : ALL CLEAR / NOMINAL ]` (Dark green with bright green text)
+  - **Right**: Clean industrial telemetry readout: `FPS: 58.4  |  SENSOR: DAYLIGHT RGB  |  OPTICS: CLEAR`.
+- **Zero Viewport Clutter**:
+  - All floating side boxes and bottom cards were eliminated, leaving 100% of the railway line unobstructed for the locomotive pilot.
 
 ---
 
@@ -366,6 +366,26 @@ During real-time video playback, operators and locomotive pilots can interact dy
 - **`[S]`**: Capture high-resolution instant snapshots to `outputs/snapshots/snapshot_<timestamp>.jpg`.
 - **`[SPACE]`**: Pause or resume live video stream for forensic hazard inspection.
 - **`[Q]` / `[ESC]`**: Gracefully terminate video capture streams and release hardware resources.
+
+---
+
+### Hardware Diagnostics: Camera Testing & Live Snapshot Tool (`src/camera_tester.py`)
+
+A dedicated camera utility tool was created to verify connected USB cameras (such as the Kreo Owl Lite FHD or Arducam 850nm IR camera) and capture ground-truth test snapshots without needing model weights:
+
+```bash
+# 1. Scan and list all connected cameras:
+python src/camera_tester.py --scan
+
+# 2. Open live 1080p stream on default camera:
+python src/camera_tester.py --cam 0
+
+# 3. Interactive Controls:
+#    [S] or [SPACE] : Save uncompressed snapshot to outputs/snapshots/
+#    [C]             : Switch to next connected camera index
+#    [F]             : Toggle Fullscreen
+#    [Q] / [ESC]     : Exit gracefully
+```
 
 ---
 

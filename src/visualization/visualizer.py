@@ -1,13 +1,13 @@
 """
-Drishti Kavach: High-Contrast Track Visualizer & Real-Time Railway HUD Dashboard
+Drishti Kavach: Classic High-Contrast Track Visualizer & Clean Old-School Railway HUD
 
-Features:
-  - Exact Pristine Color Rendering:
-      • Track Bed   : Vibrant Translucent Cyan-Blue (BGR: 255, 180, 0) [50% Alpha]
-      • Rail Lines  : Glowing Emerald Green (BGR: 0, 255, 100)
-      • Obstacles   : Dynamic Three-Tier Badges (Red / Amber / Green)
-  - Glassmorphic Top Status Telemetry Bar with ATP Kavach Emergency Brake Warnings
-  - Real-Time FPS, Sensor Channel Indicator, and Weather Status Telemetry
+Design Philosophy:
+  - Clean, minimal, old-school tactical locomotive HUD top header only.
+  - High-Contrast Track Overlay:
+      • Track Bed   : Vibrant Translucent Cyan-Blue (BGR: 255, 180, 0) [50% Alpha Blend]
+      • Rail Lines  : Glowing Emerald Green (BGR: 0, 255, 100) with closed boundary
+      • Obstacles   : Dynamic Three-Tier Badges (Red / Amber / Green) with ground anchor crosshairs
+  - Zero clutter: No floating widgets or side cards on the main viewport.
 """
 
 from typing import List, Tuple, Dict, Optional
@@ -18,28 +18,27 @@ from src.spatial_reasoning.hazard_analyzer import HazardAssessment
 
 class DrishtiVisualizer:
     """
-    Renders high-contrast track segmentation masks, obstacle bounding boxes,
-    and the real-time Kavach ATP telemetry HUD.
+    Renders high-contrast railway track overlays and a clean, old-school top HUD header.
     """
 
     def __init__(self):
-        # Exact Colors matching pristine_test
-        self.COLOR_TRACK_BED = (255, 180, 0)     # Pristine Cyan-Blue (BGR)
-        self.COLOR_RAIL_LINES = (0, 255, 100)    # Glowing Green (BGR)
+        # High-Contrast Track Colors (matching pristine_test)
+        self.COLOR_TRACK_BED = (255, 180, 0)     # Translucent Cyan-Blue (BGR)
+        self.COLOR_RAIL_LINES = (0, 255, 100)    # Glowing Emerald Green (BGR)
         self.COLOR_RAIL_BORDER = (0, 210, 80)    # Rail Outline (BGR)
 
         # Three-Tier Threat Colors
-        self.COLOR_CRITICAL = (0, 0, 240)       # Vivid Red (BGR)
-        self.COLOR_WARNING = (0, 215, 255)      # Amber / Gold (BGR)
-        self.COLOR_SAFE = (50, 220, 50)         # Green (BGR)
+        self.COLOR_CRITICAL = (0, 0, 230)       # Vivid Red (BGR)
+        self.COLOR_WARNING = (0, 210, 255)      # Amber / Gold (BGR)
+        self.COLOR_SAFE = (40, 210, 60)         # Green (BGR)
 
-        # HUD Palette
-        self.HUD_BG = (18, 20, 24)              # Dark Navy Slate (BGR)
-        self.HUD_BORDER = (45, 52, 64)          # Subtle Border (BGR)
-        self.TEXT_WHITE = (245, 245, 250)
-        self.TEXT_MUTED = (160, 170, 185)
+        # Old-School HUD Colors
+        self.HUD_BG = (12, 14, 18)              # Deep Charcoal Black (BGR)
+        self.HUD_LINE = (0, 200, 230)           # Cyan Accent Line (BGR)
+        self.TEXT_MAIN = (240, 245, 250)
+        self.TEXT_MUTED = (160, 175, 190)
 
-    def draw_hud_banner(
+    def draw_hud_header(
         self,
         canvas: np.ndarray,
         overall_status: str,
@@ -48,95 +47,70 @@ class DrishtiVisualizer:
         weather_status: str,
         hazards: List[HazardAssessment]
     ) -> np.ndarray:
-        """Draws top glassmorphism status bar with dynamic safety state."""
+        """
+        Draws an old-school, large and commanding top status header with clean typography.
+        """
         h, w = canvas.shape[:2]
-        banner_h = 60
+        header_h = 80
 
-        # Semi-transparent top banner background
+        # 1. Top Header Background Strip
         overlay = canvas.copy()
-        cv2.rectangle(overlay, (0, 0), (w, banner_h), self.HUD_BG, -1)
-        cv2.line(overlay, (0, banner_h), (w, banner_h), self.HUD_BORDER, 2)
-        cv2.addWeighted(overlay, 0.88, canvas, 0.12, 0, canvas)
+        cv2.rectangle(overlay, (0, 0), (w, header_h), self.HUD_BG, -1)
+        cv2.line(overlay, (0, header_h - 1), (w, header_h - 1), (50, 65, 80), 1)
+        cv2.line(overlay, (0, header_h), (w, header_h), (75, 95, 120), 2)
+        cv2.addWeighted(overlay, 0.92, canvas, 0.08, 0, canvas)
 
-        # Left: Branding
-        cv2.putText(canvas, "DRISHTI KAVACH", (20, 28), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0, 235, 255), 2, cv2.LINE_AA)
-        cv2.putText(canvas, "ATP OPTICAL PERCEPTION", (20, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.40, self.TEXT_MUTED, 1, cv2.LINE_AA)
+        # 2. Left: System Branding + Status Indicator Lamp
+        lamp_col = self.COLOR_CRITICAL if overall_status == "CRITICAL" else (
+            self.COLOR_WARNING if overall_status == "WARNING" else self.COLOR_SAFE
+        )
+        cv2.circle(canvas, (24, 40), 6, lamp_col, -1, cv2.LINE_AA)
+        cv2.circle(canvas, (24, 40), 8, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # Center: Safety Status Badge
-        badge_w = 420
-        badge_h = 42
+        cv2.putText(canvas, "DRISHTI KAVACH", (44, 47),
+                    cv2.FONT_HERSHEY_DUPLEX, 0.85, (0, 235, 255), 1, cv2.LINE_AA)
+
+        # 3. Center: Old-School Tactical Safety Alert Box (Larger 46px Height)
+        badge_w = 580
+        badge_h = 46
         badge_x1 = (w - badge_w) // 2
-        badge_y1 = 9
+        badge_y1 = 17
         badge_x2 = badge_x1 + badge_w
         badge_y2 = badge_y1 + badge_h
 
         if overall_status == "CRITICAL":
-            badge_color = self.COLOR_CRITICAL
-            badge_text = "EMERGENCY: OBSTACLE IN TRACK [BRAKE]"
-            border_color = (120, 120, 255)
+            box_bg = (0, 0, 185)
+            box_border = (0, 0, 255)
+            badge_text = "[ ! EMERGENCY BRAKE : OBSTACLE IN TRACK ! ]"
+            text_color = (255, 255, 255)
         elif overall_status == "WARNING":
-            badge_color = self.COLOR_WARNING
-            badge_text = "CAUTION: CLEARANCE BREACH"
-            border_color = (100, 235, 255)
+            box_bg = (0, 140, 205)
+            box_border = (0, 220, 255)
+            badge_text = "[ CAUTION : CLEARANCE ENVELOPE BREACH ]"
+            text_color = (255, 255, 255)
         else:
-            badge_color = self.COLOR_SAFE
-            badge_text = "TRACK CLEAR - ALL CLEAR"
-            border_color = (100, 255, 120)
+            box_bg = (15, 70, 22)
+            box_border = (40, 190, 55)
+            badge_text = "[ TRACK STATUS : ALL CLEAR / NOMINAL ]"
+            text_color = (100, 255, 120)
 
-        cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), badge_color, -1)
-        cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), border_color, 2)
-        
-        (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_DUPLEX, 0.60, 2)
-        text_x = badge_x1 + (badge_w - tw) // 2
-        text_y = badge_y1 + (badge_h + th) // 2 - 1
-        cv2.putText(canvas, badge_text, (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX, 0.60, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), box_bg, -1)
+        cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), box_border, 1)
 
-        # Right: Telemetry (FPS, Sensor, Weather)
-        right_x = w - 310
-        cv2.putText(canvas, f"FPS: {fps:.1f}", (right_x, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (100, 255, 100), 1, cv2.LINE_AA)
-        cv2.putText(canvas, f"SENSOR: {sensor_mode}", (right_x + 95, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 200, 100), 1, cv2.LINE_AA)
-        cv2.putText(canvas, f"OPTICS: {weather_status}", (right_x, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.TEXT_MUTED, 1, cv2.LINE_AA)
+        (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_DUPLEX, 0.65, 1)
+        tx = badge_x1 + (badge_w - tw) // 2
+        ty = badge_y1 + (badge_h + th) // 2 - 1
+        cv2.putText(canvas, badge_text, (tx, ty), cv2.FONT_HERSHEY_DUPLEX, 0.65, text_color, 1, cv2.LINE_AA)
 
-        return canvas
+        # 4. Right: Telemetry (FPS, SENSOR, WEATHER)
+        fps_str = f"FPS: {fps:4.1f}"
+        sensor_str = f"SENSOR: {sensor_mode}"
+        optics_str = f"OPTICS: {weather_status}"
+        telemetry_str = f"{fps_str}  |  {sensor_str}  |  {optics_str}"
 
-    def draw_telemetry_card(
-        self,
-        canvas: np.ndarray,
-        track_detected: bool,
-        hazards: List[HazardAssessment]
-    ) -> np.ndarray:
-        """Draws bottom-left telemetry diagnostics card."""
-        h, w = canvas.shape[:2]
-        card_w = 340
-        card_h = 110 + min(len(hazards), 3) * 22
-        x1 = 20
-        y1 = h - card_h - 20
-        x2 = x1 + card_w
-        y2 = h - 20
-
-        overlay = canvas.copy()
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), self.HUD_BG, -1)
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), self.HUD_BORDER, 2)
-        cv2.addWeighted(overlay, 0.85, canvas, 0.15, 0, canvas)
-
-        cv2.putText(canvas, "CLEARANCE ENVELOPE TELEMETRY", (x1 + 14, y1 + 24), cv2.FONT_HERSHEY_DUPLEX, 0.48, (0, 235, 255), 1, cv2.LINE_AA)
-        
-        track_str = "TRACK GEOMETRY: LOCKED" if track_detected else "TRACK GEOMETRY: ACQUIRING"
-        track_col = (50, 220, 50) if track_detected else (0, 180, 255)
-        cv2.putText(canvas, track_str, (x1 + 14, y1 + 48), cv2.FONT_HERSHEY_SIMPLEX, 0.45, track_col, 1, cv2.LINE_AA)
-
-        crit_count = sum(1 for hzd in hazards if hzd.threat_level == "CRITICAL")
-        warn_count = sum(1 for hzd in hazards if hzd.threat_level == "WARNING")
-        
-        cv2.putText(canvas, f"CRITICAL HAZARDS: {crit_count}", (x1 + 14, y1 + 72), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.COLOR_CRITICAL if crit_count > 0 else self.TEXT_MUTED, 1, cv2.LINE_AA)
-        cv2.putText(canvas, f"WARNING HAZARDS:  {warn_count}", (x1 + 180, y1 + 72), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.COLOR_WARNING if warn_count > 0 else self.TEXT_MUTED, 1, cv2.LINE_AA)
-
-        # List top detected items
-        cur_y = y1 + 96
-        for idx, hzd in enumerate(hazards[:3]):
-            desc = f"• {hzd.class_name} [{hzd.threat_level}] - {hzd.confidence:.0%}"
-            cv2.putText(canvas, desc, (x1 + 14, cur_y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, hzd.color_bgr, 1, cv2.LINE_AA)
-            cur_y += 20
+        (rw, rh), _ = cv2.getTextSize(telemetry_str, cv2.FONT_HERSHEY_SIMPLEX, 0.54, 1)
+        rx = w - rw - 24
+        cv2.putText(canvas, telemetry_str, (rx, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.54, self.TEXT_MAIN, 1, cv2.LINE_AA)
 
         return canvas
 
@@ -155,20 +129,18 @@ class DrishtiVisualizer:
         """
         Renders full visualizer output:
         1. High-contrast track bed & rail lines masks
-        2. Hazard bounding boxes with dynamic threat badges
-        3. Real-time Kavach telemetry HUD
+        2. Clean obstacle bounding boxes with subtle badge
+        3. Old-school sleek top HUD header
         """
         h, w = frame_bgr.shape[:2]
         canvas = frame_bgr.copy()
         track_overlay = frame_bgr.copy()
-        has_track = False
 
-        # 1. Render Track Bed (Cyan-Blue)
+        # 1. Render Track Bed (Cyan-Blue 50% blend)
         for poly in track_bed_polys:
             if len(poly) >= 3:
                 pts_np = np.array(poly, np.int32).reshape((-1, 1, 2))
                 cv2.fillPoly(track_overlay, [pts_np], self.COLOR_TRACK_BED)
-                has_track = True
 
         # 2. Render Rail Lines (Glowing Green)
         for poly in rail_lines_polys:
@@ -176,49 +148,47 @@ class DrishtiVisualizer:
                 pts_np = np.array(poly, np.int32).reshape((-1, 1, 2))
                 cv2.fillPoly(track_overlay, [pts_np], self.COLOR_RAIL_LINES)
                 cv2.polylines(track_overlay, [pts_np], True, self.COLOR_RAIL_BORDER, 2, cv2.LINE_AA)
-                has_track = True
 
-        # Single 50/50 blend for crisp vibrancy
-        if has_track:
-            cv2.addWeighted(track_overlay, 0.50, canvas, 0.50, 0, canvas)
+        # 3. Alpha Blend Track Overlays
+        cv2.addWeighted(track_overlay, 0.50, canvas, 0.50, 0, canvas)
 
-        # 3. Render Obstacle Bounding Boxes & Dynamic Badges
+        # 4. Render Detected Obstacles (Clean class name + confidence only)
         for hzd in hazards:
             x1, y1, x2, y2 = hzd.box_coords
             color = hzd.color_bgr
-            
-            # Thick bounding box
-            cv2.rectangle(canvas, (x1, y1), (x2, y2), color, 3, cv2.LINE_AA)
 
-            # Ground contact anchor line
-            anchor_x = (x1 + x2) // 2
-            cv2.circle(canvas, (anchor_x, y2), 5, color, -1)
-            cv2.circle(canvas, (anchor_x, y2), 7, (255, 255, 255), 1)
+            # Solid Bounding Box with Clean 2px Line
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), color, 2)
 
-            # Badge Text
-            if hzd.threat_level == "CRITICAL":
-                badge_text = f"CRITICAL: {hzd.class_name} [{hzd.confidence:.0%}]"
-            elif hzd.threat_level == "WARNING":
-                badge_text = f"WARNING: {hzd.class_name} [{hzd.distance_to_track_px:.0f}px]"
-            else:
-                badge_text = f"{hzd.class_name} [{hzd.confidence:.0%}]"
+            # Ground Contact Anchor Reticle
+            ax = int((x1 + x2) / 2)
+            ay = int(y2)
+            cv2.circle(canvas, (ax, ay), 4, color, -1, cv2.LINE_AA)
+            cv2.circle(canvas, (ax, ay), 7, (255, 255, 255), 1, cv2.LINE_AA)
 
-            (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_DUPLEX, 0.58, 1)
-            
-            badge_y1 = max(0, y_min if 'y_min' in locals() else y1 - th - 12, y1 - th - 12)
-            badge_y2 = max(th + 12, y1)
-            badge_x2 = min(w, x1 + tw + 16)
+            # Clean Label: Just Class Name and Confidence Percentage
+            label = f"{hzd.class_name} {hzd.confidence:.0%}"
 
-            # Solid color badge background + white border
-            cv2.rectangle(canvas, (x1, badge_y1), (badge_x2, badge_y2), color, -1)
-            cv2.rectangle(canvas, (x1, badge_y1), (badge_x2, badge_y2), (255, 255, 255), 1)
+            (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.46, 1)
+            by1 = max(0, y1 - lh - 8)
+            by2 = y1
+            bx1 = x1
+            bx2 = x1 + lw + 12
 
-            # White text
-            cv2.putText(canvas, badge_text, (x1 + 8, badge_y2 - 6), cv2.FONT_HERSHEY_DUPLEX, 0.58, (255, 255, 255), 1, cv2.LINE_AA)
+            # Clean solid badge background in threat color
+            cv2.rectangle(canvas, (bx1, by1), (bx2, by2), color, -1)
+            cv2.rectangle(canvas, (bx1, by1), (bx2, by2), (255, 255, 255), 1)
+            cv2.putText(canvas, label, (bx1 + 6, by2 - 4), cv2.FONT_HERSHEY_DUPLEX, 0.46, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # 4. Render Telemetry HUD
+        # 5. Render Top HUD Header Only
         if show_hud:
-            self.draw_hud_banner(canvas, overall_status, fps, sensor_mode, weather_status, hazards)
-            self.draw_telemetry_card(canvas, has_track, hazards)
+            canvas = self.draw_hud_header(
+                canvas,
+                overall_status=overall_status,
+                fps=fps,
+                sensor_mode=sensor_mode,
+                weather_status=weather_status,
+                hazards=hazards
+            )
 
         return canvas
