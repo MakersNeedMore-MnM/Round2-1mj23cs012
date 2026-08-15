@@ -1,10 +1,13 @@
 """
 Drishti Kavach: Training Engine for Unified "RailDrishti" Model
-Clean Terminal Output with Plain-English Epoch Progress Callbacks
+Features:
+- Clean Terminal Output with Plain-English Epoch Progress Callbacks
+- Automatic Resume Support: Continues seamlessly from last.pt if interrupted with Ctrl+C
 """
 
 import os
 import sys
+import glob
 import shutil
 import warnings
 import argparse
@@ -32,10 +35,8 @@ def on_epoch_end_callback(trainer):
     box_map50 = metrics.get("metrics/mAP50(B)", 0.0) * 100.0
     mask_map50 = metrics.get("metrics/mAP50(M)", 0.0) * 100.0
     
-    # Combined score
     avg_score = (box_map50 + mask_map50) / 2.0 if mask_map50 > 0 else box_map50
     
-    # Plain English status evaluation
     if epoch <= 3 and avg_score < 30.0:
         status = "Warming up (Model is learning initial railway features & track edges)"
         rating = "Initializing"
@@ -57,6 +58,20 @@ def on_epoch_end_callback(trainer):
     print(f"\n[Epoch {epoch:2d}/{total_epochs:2d}] Box mAP: {box_map50:5.1f}% | Mask mAP: {mask_map50:5.1f}% | Rating: {rating:<11} | {status} | {next_action}")
 
 
+def find_latest_checkpoint():
+    """Locates the latest checkpoint file to resume from."""
+    potential_checkpoints = [
+        "runs/segment/RailDrishti_Training/weights/last.pt",
+        "runs/segment/RailDrishti_Training*/weights/last.pt"
+    ]
+    matches = glob.glob("runs/segment/**/weights/last.pt", recursive=True)
+    if matches:
+        # Return the most recently modified checkpoint
+        matches.sort(key=os.path.getmtime, reverse=True)
+        return matches[0]
+    return None
+
+
 def train_raildrishti(
     dataset_yaml: str = "configs/raildrishti_dataset.yaml",
     base_model: str = "yolo11s-seg.pt",
@@ -64,6 +79,8 @@ def train_raildrishti(
     imgsz: int = 1024,
     batch_size: int = 8,
     device: str = None,
+    resume: bool = False,
+    fresh_start: bool = False,
     output_model_path: str = "models/RailDrishti.pt"
 ):
     print("=" * 80)
@@ -84,49 +101,74 @@ def train_raildrishti(
     else:
         dev_name = device
 
-    print(f" • Model Architecture:  {base_model} (Unified Multi-Task Segmentation & Detection)")
-    print(f" • Target Resolution:   {imgsz}x{imgsz}")
-    print(f" • Training Epochs:     {epochs}")
-    print(f" • Batch Size:          {batch_size}")
-    print(f" • Hardware Device:     {dev_name}")
-    print(f" • Dataset Config:      {dataset_yaml}")
-    print("=" * 80 + "\n")
+    latest_ckpt = find_latest_checkpoint() if not fresh_start else None
 
-    # Initialize model
-    model = YOLO(base_model)
+    if (resume or latest_ckpt) and not fresh_start:
+        print(f"\n[+] RESUMING TRAINING: Found existing checkpoint at '{latest_ckpt}'")
+        print(f" • Hardware Device: {dev_name}")
+        print(" • Resuming from exact interrupted epoch...\n" + "=" * 80 + "\n")
+        
+        try:
+            model = YOLO(latest_ckpt)
+            model.add_callback("on_fit_epoch_end", on_epoch_end_callback)
+            model.train(resume=True)
+        except KeyboardInterrupt:
+            print("\n\n" + "=" * 80)
+            print(" [!] Training paused by user (Ctrl+C).")
+            print(f" [!] Checkpoint saved to: {latest_ckpt}")
+            print(" [!] Re-run this exact command anytime to resume automatically from this epoch!")
+            print("=" * 80)
+            return
+    else:
+        print(f" • Model Architecture:  {base_model} (Unified Multi-Task Segmentation & Detection)")
+        print(f" • Target Resolution:   {imgsz}x{imgsz}")
+        print(f" • Training Epochs:     {epochs}")
+        print(f" • Batch Size:          {batch_size}")
+        print(f" • Hardware Device:     {dev_name}")
+        print(f" • Dataset Config:      {dataset_yaml}")
+        print("=" * 80 + "\n")
 
-    # Attach our custom clean English progress callback
-    model.add_callback("on_fit_epoch_end", on_epoch_end_callback)
+        try:
+            model = YOLO(base_model)
+            model.add_callback("on_fit_epoch_end", on_epoch_end_callback)
 
-    # Start training
-    model.train(
-        data=dataset_yaml,
-        epochs=epochs,
-        imgsz=imgsz,
-        batch=batch_size,
-        device=device,
-        workers=8,
-        name="RailDrishti_Training",
-        save=True,
-        save_period=5,
-        patience=12,
-        optimizer="AdamW",
-        lr0=0.001,
-        lrf=0.01,
-        augment=True,
-        hsv_h=0.015,
-        hsv_s=0.5,
-        hsv_v=0.4,
-        degrees=5.0,
-        translate=0.08,
-        scale=0.25,
-        fliplr=0.5,
-        mosaic=0.7,
-        val=True,
-        verbose=False
-    )
+            model.train(
+                data=dataset_yaml,
+                epochs=epochs,
+                imgsz=imgsz,
+                batch=batch_size,
+                device=device,
+                workers=8,
+                name="RailDrishti_Training",
+                save=True,
+                save_period=5,
+                patience=12,
+                optimizer="AdamW",
+                lr0=0.001,
+                lrf=0.01,
+                augment=True,
+                hsv_h=0.015,
+                hsv_s=0.5,
+                hsv_v=0.4,
+                degrees=5.0,
+                translate=0.08,
+                scale=0.25,
+                fliplr=0.5,
+                mosaic=0.7,
+                val=True,
+                verbose=False
+            )
+        except KeyboardInterrupt:
+            saved_ckpt = find_latest_checkpoint()
+            print("\n\n" + "=" * 80)
+            print(" [!] Training paused by user (Ctrl+C).")
+            if saved_ckpt:
+                print(f" [!] Checkpoint successfully saved to: {saved_ckpt}")
+                print(" [!] Re-run this exact command anytime to resume automatically from this epoch!")
+            print("=" * 80)
+            return
 
-    # Save best checkpoint to models/RailDrishti.pt
+    # Post-training: copy best checkpoint to models/RailDrishti.pt
     best_pt = os.path.join(model.trainer.save_dir, "weights", "best.pt")
     if os.path.exists(best_pt):
         os.makedirs(os.path.dirname(output_model_path), exist_ok=True)
@@ -145,6 +187,8 @@ if __name__ == "__main__":
     parser.add_argument("--imgsz", type=int, default=1024, help="Input resolution (e.g. 1024 or 640)")
     parser.add_argument("--model", type=str, default="yolo11s-seg.pt", help="Base YOLO weights")
     parser.add_argument("--device", type=str, default=None, help="Device ('mps', '0', 'cpu')")
+    parser.add_argument("--resume", action="store_true", help="Explicitly force resume from checkpoint")
+    parser.add_argument("--fresh", action="store_true", help="Force fresh start from epoch 0 (ignore existing checkpoints)")
     args = parser.parse_args()
 
     train_raildrishti(
@@ -152,5 +196,7 @@ if __name__ == "__main__":
         batch_size=args.batch,
         imgsz=args.imgsz,
         base_model=args.model,
-        device=args.device
+        device=args.device,
+        resume=args.resume,
+        fresh_start=args.fresh
     )
