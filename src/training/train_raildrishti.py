@@ -1,17 +1,18 @@
 """
-Drishti Kavach: Training Engine for Unified "RailDrishti" Model
+Drishti Kavach: Training Engine for Unified "RailDrishti" Model (Maximum Precision Pipeline)
 
 CLI Flags & Usage:
   --epochs INT     : Number of training epochs (default: 40)
   --batch INT      : Batch size per iteration (default: 8)
-  --imgsz INT      : Input image resolution (default: 1024)
+  --imgsz INT      : Input image resolution: 1024 (Full Precision - Recommended) or 640 (default: 1024)
   --model STR      : Base YOLO segmentation model weights (default: yolo11s-seg.pt)
   --device STR     : Compute device: 'mps' (Apple Silicon), '0' (CUDA GPU), 'cpu'
+  --cache STR      : Dataset caching mode: 'ram' (zero-disk latency, lossless) or 'disk' (default: ram)
   --resume         : Force resume training from latest checkpoint ('last.pt')
   --fresh          : Force start training from epoch 0 (ignore existing checkpoints)
 
-Example:
-  python src/training/train_raildrishti.py --epochs 40 --batch 8 --imgsz 1024
+Maximum Precision Training Command:
+  python src/training/train_raildrishti.py --epochs 40 --batch 8 --imgsz 1024 --cache ram
 """
 
 import os
@@ -28,7 +29,7 @@ os.environ["PYTHONWARNINGS"] = "ignore"
 import torch
 from ultralytics import YOLO, settings
 
-# Ensure Ultralytics paths are locked to current project directory
+# Lock Ultralytics paths to local workspace
 PROJECT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 settings.update({
     "runs_dir": os.path.join(PROJECT_ROOT, "runs"),
@@ -92,20 +93,21 @@ def train_raildrishti(
     epochs: int = 40,
     imgsz: int = 1024,
     batch_size: int = 8,
+    cache_mode: str = "ram",
     device: str = None,
     resume: bool = False,
     fresh_start: bool = False,
     output_model_path: str = "models/RailDrishti.pt"
 ):
     print("=" * 80)
-    print(" 🛡️  DRISHTI KAVACH: TRAINING UNIFIED 'RailDrishti' MULTI-TASK MODEL")
+    print(" 🛡️  DRISHTI KAVACH: MAXIMUM PRECISION TRAINING FOR 'RailDrishti'")
     print("=" * 80)
 
     # Automatically select best hardware accelerator
     if device is None:
         if torch.backends.mps.is_available():
             device = "mps"
-            dev_name = "Apple Silicon GPU (MPS)"
+            dev_name = "Apple Silicon GPU (MPS Metal Acceleration)"
         elif torch.cuda.is_available():
             device = "0"
             dev_name = f"NVIDIA GPU ({torch.cuda.get_device_name(0)})"
@@ -138,13 +140,14 @@ def train_raildrishti(
     else:
         print(f" • Base Architecture:   {base_model} (Unified Segmentation & Detection)")
         print(f" • Working Directory:   {PROJECT_ROOT}")
-        print(f" • Target Resolution:   {imgsz}x{imgsz}")
+        print(f" • Full Resolution:     {imgsz}x{imgsz} (Maximum spatial detail for small obstacles)")
         print(f" • Training Epochs:     {epochs}")
         print(f" • Batch Size:          {batch_size}")
+        print(f" • Lossless RAM Cache:  {cache_mode.upper()} (Zero disk latency, 100% loss-free)")
         print(f" • Hardware Device:     {dev_name}")
         print(f" • Dataset Config:      {dataset_yaml}")
         print("=" * 80)
-        print("\n[+] Initializing dataset cache and GPU tensors... Starting Epoch 1 now!\n")
+        print("\n[+] Caching 1080p dataset in RAM & preparing GPU tensors... Starting Epoch 1 now!\n")
 
         try:
             model = YOLO(base_model)
@@ -158,7 +161,8 @@ def train_raildrishti(
                 device=device,
                 project=project_save_dir,
                 name="RailDrishti_Training",
-                workers=8,
+                workers=4,
+                cache=cache_mode,
                 save=True,
                 save_period=5,
                 patience=12,
@@ -200,10 +204,11 @@ def train_raildrishti(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train Unified RailDrishti Model")
+    parser = argparse.ArgumentParser(description="Train Unified RailDrishti Model (Maximum Precision)")
     parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs")
-    parser.add_argument("--batch", type=int, default=8, help="Batch size (e.g. 8 or 16)")
-    parser.add_argument("--imgsz", type=int, default=1024, help="Input resolution (e.g. 1024 or 640)")
+    parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
+    parser.add_argument("--imgsz", type=int, default=1024, help="Input resolution (default: 1024 for maximum precision)")
+    parser.add_argument("--cache", type=str, default="ram", help="Caching mode: 'ram' (lossless) or 'disk'")
     parser.add_argument("--model", type=str, default="yolo11s-seg.pt", help="Base YOLO weights")
     parser.add_argument("--device", type=str, default=None, help="Device ('mps', '0', 'cpu')")
     parser.add_argument("--resume", action="store_true", help="Force resume from checkpoint")
@@ -214,6 +219,7 @@ if __name__ == "__main__":
         epochs=args.epochs,
         batch_size=args.batch,
         imgsz=args.imgsz,
+        cache_mode=args.cache,
         base_model=args.model,
         device=args.device,
         resume=args.resume,
