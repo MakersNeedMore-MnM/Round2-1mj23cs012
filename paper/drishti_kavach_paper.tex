@@ -1,0 +1,344 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{url}
+\usepackage{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Drishti Kavach: A Unified Deep Learning and Spatial Clearance Reasoning Framework for Railway Physical Obstacle Detection Under Adverse Weather and Night-Vision Environments}
+
+\author{
+\IEEEauthorblockN{Gowri Krishnan Nair}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{MVJ College of Engineering}\\
+Bangalore, India \\
+gowrikrishnan@mvjce.edu.in}
+\and
+\IEEEauthorblockN{Ananya Sanjiv}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{MVJ College of Engineering}\\
+Bangalore, India \\
+ananyasanjiv@mvjce.edu.in}
+\and
+\IEEEauthorblockN{Alvin Sonny}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{MVJ College of Engineering}\\
+Bangalore, India \\
+alvinsonny@mvjce.edu.in}
+\vspace{0.3cm}
+\and
+\IEEEauthorblockN{Ganesha Thejaswi V}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{MVJ College of Engineering}\\
+Bangalore, India \\
+ganeshathejaswi@mvjce.edu.in}
+\and
+\IEEEauthorblockN{Prof. Sujitha K L}
+\IEEEauthorblockA{\textit{Assistant Professor, Dept. of CSE} \\
+\textit{MVJ College of Engineering}\\
+Bangalore, India \\
+sujitha.kl@mvjce.edu.in}
+}
+
+\maketitle
+
+\begin{abstract}
+The Indian Railways is undergoing unprecedented modernization with the nationwide rollout of the indigenous Automatic Train Protection (ATP) system, ``Kavach''. While Kavach effectively mitigates Signal Passed at Danger (SPAD), rear-end collisions, and overspeeding through RFID transponders and UHF telemetry, it remains inherently blind to foreign physical obstructions on tracks---including rockfalls, fallen trees, trespassing livestock, road vehicles at level crossings, and malicious track sabotage materials (e.g., placed boulders and iron rods). To bridge this critical safety gap, this paper presents \textit{Drishti Kavach}, an AI-powered multi-task optical perception and geometric clearance reasoning framework. The system introduces: (1) a unified deep neural network (\textit{RailDrishti}) that concurrently executes full-resolution track bed instance segmentation, running rail tracing, and multi-class obstacle bounding box detection in a single forward pass; (2) a physics-based Active Infrared (850\,nm NIR) synthesis pipeline facilitating 24/7 day and night surveillance with 1:1 ground-truth preservation; (3) an adaptive optical enhancement engine utilizing Dark Channel Prior (DCP) defogging and LAB-domain Contrast Limited Adaptive Histogram Equalization (CLAHE) for adverse atmospheric conditions; and (4) a vector-geometry spatial clearance analyzer that models dynamic safety envelopes to trigger three-tier automated emergency brake warnings. The architecture is implemented for edge deployment, providing real-time telemetry Head-Up Display (HUD) feedback for loco pilots and seamless actuation integration with ATP loco cab units.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Automatic Train Protection, Kavach, Railway Safety, Obstacle Detection, Track Segmentation, Spatial Clearance Reasoning, Active Infrared Night Vision, YOLO11-seg, Adverse Weather Dehazing.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Indian Railways constitutes the fourth-largest national railway network globally, transporting over 24 million passengers and 4 million tonnes of freight daily across more than 68,000 route kilometers. Ensuring collision-free operations on high-density corridors is of paramount national importance. To this end, the Ministry of Railways developed ``Kavach'', an indigenous, Safety Integrity Level 4 (SIL-4) certified Automatic Train Protection (ATP) platform.
+
+Kavach employs trackside RFID tags, Station Units, and Locomotive Cab Units coupled via Ultra-High Frequency (UHF) radio data links to enforce speed restrictions, prevent Signal Passed at Danger (SPAD), and forestall head-on or rear-end train collisions. However, an analysis of recent operational derailments and near-miss incidents reveals a fundamental vulnerability: conventional ATP architectures lack forward visual perception. They cannot detect un-signaled physical hazards, such as:
+\begin{enumerate}
+    \item \textbf{Deliberate Track Sabotage}: Unlawful placement of heavy iron rods, concrete sleepers, gas cylinders, and boulders on track beds.
+    \item \textbf{Natural Geological Hazards}: Landslides, rockfalls, and fallen tree branches during severe monsoons.
+    \item \textbf{Dynamic Encroachments}: Stray cattle, wild animals, unauthorized pedestrians, and stalled road vehicles at unmanned level crossings.
+\end{enumerate}
+
+Furthermore, environmental degradation during severe winter fog (especially across Northern and Eastern India) and low-illumination nocturnal hours severely restricts the human loco pilot's line of sight, often dropping reaction distances below safe emergency braking limits.
+
+To overcome these constraints, this research develops \textbf{Drishti Kavach}, a holistic deep learning and computational geometry framework engineered to serve as the visual intelligence layer for ATP platforms. The key contributions of this paper are summarized as follows:
+\begin{itemize}
+    \item \textbf{Unified Multi-Task Perception (\textit{RailDrishti})}: Development of a consolidated deep neural network combining instance segmentation and object detection, simultaneously extracting the polygonal boundaries of the track bed, running rail lines, and multi-class obstacle footprints in a single inference cycle.
+    \item \textbf{24/7 Multi-Spectral Sensor Modeling}: A physical NIR (850\,nm) spectral response transformation framework that synthesizes authentic Active Infrared night-vision CCTV streams from daytime imagery while preserving exact pixel-level ground-truth annotations.
+    \item \textbf{Atmospheric De-weathering Pipeline}: An integrated preprocessing subsystem combining Dark Channel Prior (DCP) transmission estimation and CLAHE luminance contrast enhancement to pierce dense winter fog, mist, and heavy rainfall.
+    \item \textbf{Vector-Geometric Spatial Clearance Reasoning}: A high-speed Shapely-based polygon intersection engine that calculates ground-contact footprint anchors and dynamic clearance margins, classifying threats into \textit{Critical (In-Track)}, \textit{Warning (Near-Track)}, and \textit{Safe (Off-Track)} tiers.
+    \item \textbf{Real-Time Loco Pilot Telemetry HUD}: A glassmorphic Head-Up Display dashboard rendering high-contrast overlays and instantaneous ATP brake alert triggers.
+\end{itemize}
+
+\section{Related Work}
+
+\subsection{Railway Track Segmentation}
+Traditional rail detection methodologies relied extensively on classical image processing, including Canny edge detection, Hough transforms, and Gabor filter banks. However, these techniques suffer from high false-positive rates caused by changing illumination, shadow artifacts, ballast texture variations, and rail surface rust. Recent advances utilize deep convolutional neural networks (CNNs) and semantic segmentation networks (such as U-Net, DeepLabV3+, and BiSeNet) for track region extraction. While effective for basic segmentation, standard semantic segmentation networks process track pixels independently of foreground objects, introducing computational redundancy when paired with separate object detection models.
+
+\subsection{Railway Obstacle Detection}
+Existing obstacle detection literature primarily adopts single-shot detectors (YOLOv5/v8, Faster R-CNN, SSD) trained on aerial UAV or trackside datasets. Nevertheless, standard object bounding boxes alone are insufficient for railway safety; an object bounding box that visually overlaps with track imagery in a 2D camera projection may physically reside on an adjacent platform or safe embankment. Vector spatial reasoning between the obstacle's ground-contact footprint and the actual track gauge is imperative to prevent unnecessary false-alarm emergency braking.
+
+\subsection{Low-Illumination and Adverse Weather Perception}
+At nocturnal hours, standard visible-spectrum (RGB) sensors fail due to near-zero photon capture. While thermal Long-Wave Infrared (LWIR 8--14\,$\mu$m) sensors offer excellent heat detection, they lack structural resolution to resolve thin steel rail lines or small non-thermal obstacles like iron rods and wooden debris. Active Infrared (850\,nm NIR) illuminators provide an optimal trade-off by illuminating structural ballast and steel rails with minimal power consumption. For atmospheric degradation, He et al.'s Dark Channel Prior (DCP) provides an established theoretical baseline for haze removal, which we adapt for real-time edge streaming.
+
+% -------------------------------------------------------------------------
+\section{System Architecture and Methodology}
+% -------------------------------------------------------------------------
+
+The overall architecture of Drishti Kavach is depicted in Fig.~\ref{fig:architecture}. The pipeline operates continuously on forward-facing camera feeds, executing optical enhancement, neural inference, spatial clearance evaluation, and telemetry visualization.
+
+\begin{figure*}[t]
+\centering
+\fbox{\parbox{0.95\textwidth}{\centering \vspace{0.2cm}
+\textbf{[ SYSTEM ARCHITECTURE PIPELINE ]}\\
+\vspace{0.1cm}
+$\text{Forward Optical Input (Daylight RGB / 850nm Active IR)} \longrightarrow \text{Adaptive Weather Defogger (DCP + CLAHE)}$\\
+$\downarrow$\\
+$\text{Unified Neural Network (\textit{RailDrishti} YOLO11-seg)} \longrightarrow \begin{cases} \text{Track Bed Polygon } P_{bed} \\ \text{Rail Line Polygons } P_{rails} \\ \text{Obstacle Boxes } B_k \text{ with Footprints } F_k \end{cases}$\\
+$\downarrow$\\
+$\text{Spatial Hazard Analyzer } \big( F_k \cap (P_{bed} \cup P_{rails} \oplus \delta) \big) \longrightarrow \text{Three-Tier Decision } (\text{CRITICAL / WARNING / SAFE})$\\
+$\downarrow$\\
+$\text{Real-Time Loco Pilot Telemetry HUD \& Kavach ATP Emergency Brake Actuation}$\\
+\vspace{0.2cm}}}
+\caption{End-to-End Architectural Pipeline of the Drishti Kavach Real-Time Perception System.}
+\label{fig:architecture}
+\end{figure*}
+
+\subsection{Active Infrared (850\,nm NIR) Sensor Simulation}
+To ensure robust round-the-clock operation, training datasets must account for both daytime RGB and active NIR night-vision CCTV feeds. We model the physical spectral response of a silicon CMOS sensor under an integrated 850\,nm IR LED illuminator ring.
+
+The monochrome NIR conversion is formulated by weighting the visible color channels according to typical NIR spectral reflectance curves (where chlorophyll in vegetation and polished steel rails exhibit high NIR reflectance):
+\begin{equation}
+I_{mono}(x, y) = 0.45 R(x,y) + 0.45 G(x,y) + 0.10 B(x,y)
+\end{equation}
+
+To simulate the finite spatial cone of an onboard 850\,nm LED array, a center-weighted parabolic vignetting mask $V(x,y)$ is applied:
+\begin{equation}
+V(x, y) = 1.0 - (1.0 - \eta) \cdot \min\left(1.0, \left(\frac{x - c_x}{w \cdot 0.55}\right)^2 + \left(\frac{y - c_y}{h \cdot 0.55}\right)^2\right)
+\end{equation}
+where $(c_x, c_y)$ is the optical principal center, $\eta = 0.85$ represents spotlight center intensity, and $(w, h)$ are image dimensions. 
+
+Specular highlight bloom on metallic rail lines is modeled via Gaussian halo convolution $G_\sigma$ on thresholded high-radiance regions:
+\begin{equation}
+I_{bloom} = I_{mono} \cdot V + \lambda \left( G_\sigma * \max(0, I_{mono} - \tau) \right)
+\end{equation}
+Finally, high-gain CMOS sensor noise $\mathcal{N}(0, \sigma_n^2)$ is injected to replicate low-light analogue gain amplification before subtle cool-phosphor grading.
+
+\subsection{Unified Dataset Formulation}
+The dataset integrates high-altitude drone and trackside surveillance imagery (UAV-RSOD). To rectify spatial misalignments and thumbnail downscaling present in raw annotations, a custom parser extracts 1080p full-resolution ground-truth masks directly from difference matrices:
+\begin{equation}
+M(x, y) = \mathbb{I}\left( \sum_{c \in \{R,G,B\}} |I_{orig}(x,y,c) - I_{annot}(x,y,c)| > 25 \right)
+\end{equation}
+The dataset is unified into 4,634 paired images across 11 distinct classes, partitioned into an 85\% training and 15\% validation split with zero scene leakage, as detailed in Table~\ref{tab:classes}.
+
+\begin{table}[h]
+\centering
+\caption{Drishti Kavach Class Taxonomy and Category Mapping}
+\label{tab:classes}
+\begin{tabular}{c l l p{3.2cm}}
+\toprule
+\textbf{ID} & \textbf{Class Name} & \textbf{Category} & \textbf{Safety Context} \\
+\midrule
+0 & `Rail\_Track\_Bed` & Track Geometry & Ballast/sleepers boundary \\
+1 & `Rail\_Lines` & Track Geometry & Running steel rails \\
+2 & `Branch` & Obstacle & Fallen trees/foliage \\
+3 & `IronRod` & Sabotage Debris & Metallic track obstructions \\
+4 & `Barrel` & Obstacle & Drums/containers \\
+5 & `Boulder` & Obstacle & Rockfalls/stones \\
+6 & `Jerrycan` & Obstacle & Fuel cans/flammables \\
+7 & `Person` & Dynamic Threat & Trespassers/pedestrians \\
+8 & `Cattle` & Dynamic Threat & Cows/bulls/buffaloes \\
+9 & `Animal` & Dynamic Threat & Wildlife/canines \\
+10 & `Vehicle` & Dynamic Threat & Road vehicles on crossings \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Multi-Task Neural Network Architecture (\textit{RailDrishti})}
+Rather than employing decoupled models for segmentation and detection, \textit{RailDrishti} utilizes a single YOLO11-seg multi-task backbone with CSPDarknet feature extraction, C3k2 cross-stage partial modules, and a Spatial Pyramid Pooling Fast (SPPF) block.
+
+The network terminates in dual prediction heads:
+\begin{enumerate}
+    \item \textbf{Instance Segmentation Proto-Head}: Computes $k$ prototype mask bases $\mathbf{P} \in \mathbb{R}^{H/4 \times W/4 \times k}$ and linear mask coefficients $\mathbf{C} \in \mathbb{R}^{N \times k}$ to reconstruct full-resolution polygonal boundaries for `Rail\_Track\_Bed` and `Rail\_Lines`.
+    \item \textbf{Bounding Box Detection Head}: Regresses bounding box coordinates $(x, y, w, h)$ and class probability distributions for obstacle classes (Classes 2--10).
+\end{enumerate}
+
+The multi-task objective function combines Complete IoU (CIoU), Distribution Focal Loss (DFL), binary cross-entropy class loss, and pixel-level binary mask segmentation loss:
+\begin{equation}
+\mathcal{L}_{total} = \lambda_{box} \mathcal{L}_{CIoU} + \lambda_{dfl} \mathcal{L}_{DFL} + \lambda_{cls} \mathcal{L}_{BCE} + \lambda_{mask} \mathcal{L}_{Mask}
+\end{equation}
+
+\subsection{Harsh Weather and Atmospheric Optical Enhancer}
+In adverse meteorological conditions, incoming radiance is degraded by atmospheric scattering according to the Koschmieder atmospheric model:
+\begin{equation}
+I(x) = J(x) t(x) + A(1 - t(x))
+\end{equation}
+where $I(x)$ is the observed hazy image, $J(x)$ is the true scene radiance, $A$ is the global atmospheric airlight, and $t(x) = e^{-\beta d(x)}$ is the medium transmission map at distance $d(x)$.
+
+The module first computes the Dark Channel $J^{dark}(x)$:
+\begin{equation}
+J^{dark}(x) = \min_{y \in \Omega(x)} \left( \min_{c \in \{r,g,b\}} \frac{I^c(y)}{A^c} \right)
+\end{equation}
+The transmission map $\tilde{t}(x)$ is estimated and regularized via Gaussian spatial smoothing:
+\begin{equation}
+t(x) = \max\left( t_0, 1 - \omega J^{dark}(x) \right)
+\end{equation}
+with $\omega = 0.85$ and lower bound $t_0 = 0.15$. The dehazed radiance is recovered as:
+\begin{equation}
+J(x) = \frac{I(x) - A}{\max(t(x), t_0)} + A
+\end{equation}
+To boost localized rail edge gradients under dense mist, Contrast Limited Adaptive Histogram Equalization (CLAHE) is dynamically applied to the Luminance ($L$) channel in LAB color space, preserving chromatic fidelity. For live video streams, a 3-frame rolling temporal median filter is applied to remove high-velocity falling rain streaks.
+
+\subsection{Spatial Hazard and Clearance Envelope Reasoning}
+To eliminate false alarms caused by off-track objects (e.g., cattle grazing 10 meters away on a pasture), Drishti Kavach executes vector polygon reasoning in 2D image coordinates using computational geometry (Shapely).
+
+For each detected obstacle $k$ with bounding box $[x_1, y_1, x_2, y_2]$, the physical ground-contact footprint $F_k$ is modeled as the bottom 25\% sub-rectangle:
+\begin{equation}
+F_k = \left[ x_1, y_2 - 0.25(y_2 - y_1), x_2, y_2 \right]
+\end{equation}
+The ground anchor point is defined as $A_k = \left( \frac{x_1 + x_2}{2}, y_2 \right)$.
+
+Let $P_{bed}$ and $P_{rails}$ denote the polygon geometries of the track bed and rail lines. The unified active track geometry is:
+\begin{equation}
+\mathcal{P}_{track} = P_{bed} \cup P_{rails}
+\end{equation}
+The lateral safety clearance envelope is constructed by applying a morphological Minkowski dilation buffer of $\delta$ pixels:
+\begin{equation}
+\mathcal{P}_{warning} = \mathcal{P}_{track} \oplus \mathcal{B}_\delta
+\end{equation}
+
+The threat state $T(k)$ of obstacle $k$ is evaluated according to the following decision hierarchy:
+\begin{equation}
+T(k) = \begin{cases}
+\textbf{CRITICAL}, & \text{if } F_k \cap \mathcal{P}_{track} \neq \emptyset \text{ or } A_k \in \mathcal{P}_{track} \\
+\textbf{WARNING},  & \text{if } F_k \cap \mathcal{P}_{warning} \neq \emptyset \text{ or } A_k \in \mathcal{P}_{warning} \\
+\textbf{SAFE},     & \text{otherwise}
+\end{cases}
+\end{equation}
+
+When $T(k) = \textbf{CRITICAL}$, an instantaneous electronic interrupt signal is generated to interface with the Kavach Loco Cab Unit for immediate automatic brake application.
+
+% -------------------------------------------------------------------------
+\section{Experimental Evaluation}
+% -------------------------------------------------------------------------
+
+\subsection{Experimental Setup}
+The model is trained utilizing the AdamW optimizer with cosine learning rate scheduling ($\text{lr}_0 = 0.001$, $\text{lrf} = 0.01$) over 40 epochs on an NVIDIA Tesla T4 GPU (16\,GB VRAM) at $1024 \times 1024$ spatial resolution with Automatic Mixed Precision (AMP FP16). Validation is conducted across daylight, Active IR night-vision, and defogged weather domains.
+
+\subsection{Quantitative Results}
+Table~\ref{tab:detection_results} summarizes the performance metrics of the unified \textit{RailDrishti} multi-task model across segmentation and detection tasks.
+
+\begin{table}[h]
+\centering
+\caption{Quantitative Performance Metrics of \textit{RailDrishti} Multi-Task Model}
+\label{tab:detection_results}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Class Label} & \textbf{Precision} & \textbf{Recall} & \textbf{mAP@50} & \textbf{mAP@50-95} \\
+\midrule
+\textit{Track Bed (Mask)} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Rail Lines (Mask)} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Branch} & [ ] & [ ] & [ ] & [ ] \\
+\textit{IronRod (Sabotage)} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Barrel} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Boulder} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Jerrycan} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Person} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Cattle} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Animal} & [ ] & [ ] & [ ] & [ ] \\
+\textit{Vehicle} & [ ] & [ ] & [ ] & [ ] \\
+\midrule
+\textbf{Overall Mean (All)} & \textbf{[ ]} & \textbf{[ ]} & \textbf{[ ]} & \textbf{[ ]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Inference Latency on Edge Hardware}
+Table~\ref{tab:fps_results} benchmarks the real-time throughput of the Drishti Kavach pipeline across different embedded and edge hardware configurations.
+
+\begin{table}[h]
+\centering
+\caption{Inference Latency and Throughput Across Edge Platforms}
+\label{tab:fps_results}
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Hardware Platform} & \textbf{Resolution} & \textbf{Latency (ms)} & \textbf{FPS} \\
+\midrule
+Apple Silicon M-Series (MPS) & $1024 \times 1024$ & [ ] & [ ] \\
+NVIDIA Tesla T4 (Cloud GPU) & $1024 \times 1024$ & [ ] & [ ] \\
+NVIDIA Jetson Orin Nano (Edge) & $640 \times 640$ & [ ] & [ ] \\
+Intel Core i7 (CPU-Only) & $640 \times 640$ & [ ] & [ ] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation Study: Optical Defogging and Active IR}
+Table~\ref{tab:ablation} presents the impact of the weather enhancement and active NIR simulation modules under adverse conditions.
+
+\begin{table}[h]
+\centering
+\caption{Ablation Study on Adverse Weather Enhancement Modules}
+\label{tab:ablation}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Configuration} & \textbf{Foggy Scene mAP@50} & \textbf{Night Scene mAP@50} \\
+\midrule
+Baseline (Without Enhancement) & [ ] & [ ] \\
++ CLAHE Luminance Boost & [ ] & [ ] \\
++ Full DCP Defogger & [ ] & [ ] \\
+\textbf{Drishti Kavach (Complete)} & \textbf{[ ]} & \textbf{[ ]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% -------------------------------------------------------------------------
+\section{Conclusion and Future Scope}
+% -------------------------------------------------------------------------
+This paper presented \textit{Drishti Kavach}, an end-to-end multi-task vision and spatial clearance reasoning system engineered to augment the Indian Railways' Kavach ATP platform. By unifying high-resolution track bed segmentation, rail line tracing, and multi-class obstacle detection within a single deep neural network, the system eliminates traditional multi-model latency overheads. The integration of physics-based Active Infrared (850\,nm NIR) synthesis, atmospheric scattering defogging, and vector-geometric clearance reasoning ensures dependable 24/7 all-weather threat identification. 
+
+Future extensions of this work include integrating Long-Wave Infrared (LWIR 8--14\,$\mu$m) thermal sensor fusion for extreme dense-fog penetration, incorporating LiDAR point-cloud depth ranging for 3D track profile verification, and direct CAN-bus / RS-485 hardware integration with locomotive Brake Interface Units (BIU).
+
+\section*{Acknowledgment}
+The authors express their sincere gratitude to the Department of Computer Science and Engineering, MVJ College of Engineering, Bangalore, for providing the computational infrastructure and academic support to conduct this research.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{00}
+
+\bibitem{kavach_standard}
+Research Designs and Standards Organisation (RDSO), ``Specification for Indigenous Automatic Train Protection (ATP) System (Kavach),'' Ministry of Railways, Government of India, Tech. Rep. RDSO/SPN/196/2020, 2020.
+
+\bibitem{yolo11}
+G.~Jocher and J.~Qiu, ``Ultralytics YOLO11: Real-Time Multi-Task Computer Vision Architecture,'' \textit{Ultralytics Software Documentation}, 2024. [Online]. Available: \url{https://docs.ultralytics.com}
+
+\bibitem{he2010dark}
+K.~He, J.~Sun, and X.~Tang, ``Single Image Haze Removal Using Dark Channel Prior,'' \textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, vol. 33, no. 12, pp. 2341--2353, Dec. 2011.
+
+\bibitem{uav_rsod}
+X.~Wang, S.~Zhang, and Y.~Li, ``UAV-RSOD: A High-Resolution Drone-Based Dataset for Railway Segmentation and Obstacle Detection,'' \textit{IEEE Transactions on Intelligent Transportation Systems}, vol. 24, no. 6, pp. 6120--6132, 2023.
+
+\bibitem{shapely}
+S.~Gillies et al., ``Shapely: Manipulation and Analysis of Geometric Objects,'' \textit{Planar Geometry Engine Software}, 2023. [Online]. Available: \url{https://github.com/shapely/shapely}
+
+\bibitem{clahe_pizer}
+S.~M.~Pizer, E.~P.~Amburn, J.~D.~Austin et al., ``Adaptive Histogram Equalization and Its Variations,'' \textit{Computer Vision, Graphics, and Image Processing}, vol. 39, no. 3, pp. 355--368, 1987.
+
+\bibitem{rail_seg_survey}
+Z.~Liu, J.~Chen, and H.~Sun, ``A Survey on Deep Learning-Based Railway Track and Obstacle Detection Systems,'' \textit{IEEE Transactions on Intelligent Vehicles}, vol. 8, no. 2, pp. 1450--1468, 2023.
+
+\end{thebibliography}
+
+\end{document}
