@@ -40,6 +40,18 @@ models/*.onnx
 outputs/*
 !outputs/.gitkeep
 
+# LaTeX Compilation Artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.nav
+*.snm
+*.vrb
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
 # IDE / Editor Files
 .vscode/
 .idea/
