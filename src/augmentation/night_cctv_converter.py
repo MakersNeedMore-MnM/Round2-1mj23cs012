@@ -105,36 +105,68 @@ def convert_image_file(in_path: str, out_path: str, seed: int = 42):
     return out_path
 
 
-def generate_sample_previews(sample_img_path: str, output_dir: str = "outputs"):
-    """Generates visual comparison grid (Daylight vs Active IR CCTV)."""
+def generate_sample_previews(sample_img_path: str = None, output_dir: str = "outputs"):
+    """Generates visual comparison grids (Daylight vs Active IR CCTV) in the original banner style."""
+    previews_dir = os.path.join(output_dir, "day_vs_night_previews")
+    os.makedirs(previews_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
-    img_bgr = cv2.imread(sample_img_path)
-    if img_bgr is None:
-        raise ValueError(f"Could not load image from {sample_img_path}")
 
-    ir_bgr = NightCCTVConverter.to_active_ir(img_bgr)
+    def make_strip(img_bgr):
+        ir_bgr = NightCCTVConverter.to_active_ir(img_bgr)
 
-    def add_banner(im, title, color_rgb=(255, 255, 255)):
-        h, w = im.shape[:2]
-        canvas = im.copy()
-        cv2.rectangle(canvas, (0, 0), (w, 55), (15, 15, 15), -1)
-        cv2.putText(canvas, title, (20, 38), cv2.FONT_HERSHEY_DUPLEX, 0.9, color_rgb, 2, cv2.LINE_AA)
-        return canvas
+        def add_banner(im, title, color_rgb=(255, 255, 255)):
+            h, w = im.shape[:2]
+            canvas = im.copy()
+            cv2.rectangle(canvas, (0, 0), (w, 55), (15, 15, 15), -1)
+            cv2.putText(canvas, title, (20, 38), cv2.FONT_HERSHEY_DUPLEX, 0.9, color_rgb, 2, cv2.LINE_AA)
+            return canvas
 
-    card_day = add_banner(img_bgr, "ORIGINAL DAYLIGHT (1080p RGB)", (255, 200, 50))
-    card_ir = add_banner(ir_bgr, "DRISHTI KAVACH: ACTIVE IR CCTV (850nm NIGHT VISION)", (80, 255, 140))
+        card_day = add_banner(img_bgr, "ORIGINAL DAYLIGHT (1080p RGB)", (255, 200, 50))
+        card_ir = add_banner(ir_bgr, "DRISHTI KAVACH: ACTIVE IR CCTV (850nm NIGHT VISION)", (80, 255, 140))
 
-    scale = 0.5
-    w_s, h_s = int(img_bgr.shape[1] * scale), int(img_bgr.shape[0] * scale)
-    grid_day = cv2.resize(card_day, (w_s, h_s))
-    grid_ir = cv2.resize(card_ir, (w_s, h_s))
+        scale = 0.5
+        w_s, h_s = int(img_bgr.shape[1] * scale), int(img_bgr.shape[0] * scale)
+        grid_day = cv2.resize(card_day, (w_s, h_s))
+        grid_ir = cv2.resize(card_ir, (w_s, h_s))
 
-    preview_strip = np.hstack([grid_day, grid_ir])
-    
-    out_file = os.path.join(output_dir, "day_vs_night_preview.jpg")
-    cv2.imwrite(out_file, preview_strip)
-    print(f"\n[+] Generated Daylight vs Active IR comparison preview at: {out_file}")
-    return out_file
+        return np.hstack([grid_day, grid_ir])
+
+    # 1. Generate primary single preview
+    primary_path = sample_img_path or "dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/63.jpg"
+    if os.path.exists(primary_path):
+        img_primary = cv2.imread(primary_path)
+        if img_primary is not None:
+            strip = make_strip(img_primary)
+            main_out = os.path.join(output_dir, "day_vs_night_preview.jpg")
+            cv2.imwrite(main_out, strip)
+            print(f"[+] Generated main comparison preview: {main_out}")
+
+    # 2. Generate diverse set of sample comparison cards
+    v1_images = sorted(glob.glob("dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/*.jpg"))
+    v2_images = sorted(glob.glob("dataset_uav-rsod/V2 UAV-RSOD_Dataset for Obstacle Detection/images/train/*.jpg"))
+
+    samples = [
+        ("sample_1_track_geometry.jpg", v1_images[10] if len(v1_images) > 10 else primary_path),
+        ("sample_2_rail_switch.jpg", v1_images[50] if len(v1_images) > 50 else primary_path),
+        ("sample_3_obstacle_debris.jpg", v2_images[15] if len(v2_images) > 15 else primary_path),
+        ("sample_4_trackside_pedestrian.jpg", v2_images[80] if len(v2_images) > 80 else primary_path),
+        ("sample_5_livestock_near_track.jpg", v2_images[150] if len(v2_images) > 150 else primary_path),
+        ("sample_6_crossing_vehicle.jpg", v2_images[200] if len(v2_images) > 200 else primary_path),
+    ]
+
+    for fname, img_p in samples:
+        if not os.path.exists(img_p):
+            continue
+        img = cv2.imread(img_p)
+        if img is None:
+            continue
+        strip = make_strip(img)
+        out_p = os.path.join(previews_dir, fname)
+        cv2.imwrite(out_p, strip)
+        print(f"[+] Saved comparison preview: {out_p}")
+
+    print(f"\n[+] All {len(samples)} previews generated in: {previews_dir}/")
+    return previews_dir
 
 
 def batch_convert_dataset(dataset_root: str = "dataset_uav-rsod", num_workers: int = 8):

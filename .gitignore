@@ -34,11 +34,9 @@ runs/
 *.tflite
 models/*.pt
 models/*.onnx
-!models/.gitkeep
 
 # Output Images, Videos, and Verification Samples
 outputs/*
-!outputs/.gitkeep
 
 # Research Paper (Local Only)
 paper/
