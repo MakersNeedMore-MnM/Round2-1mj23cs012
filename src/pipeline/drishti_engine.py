@@ -5,7 +5,7 @@ Integrates:
   1. Weather & Atmospheric Optical Enhancer (Adaptive Defogger / CLAHE)
   2. Unified 'RailDrishti' Multi-Task Segmentation & Detection Model
   3. Spatial Hazard & Clearance Envelope Reasoning Engine
-  4. BiSeNetV2-Style High-Contrast HUD Dashboard Renderer
+  4. Real-Time Railway Telemetry HUD Dashboard Renderer
 """
 
 import os
@@ -153,7 +153,7 @@ class DrishtiEngine:
         frame_time = t_end - t_start
         self.fps = 1.0 / max(frame_time, 0.001)
 
-        # 6. Render BiSeNetV2 HUD
+        # 6. Render Telemetry HUD
         rendered = self.visualizer.render(
             frame_bgr=enhanced_frame,
             track_bed_polys=track_bed_polys,

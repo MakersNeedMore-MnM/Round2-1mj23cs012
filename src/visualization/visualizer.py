@@ -1,5 +1,5 @@
 """
-Drishti Kavach: BiSeNetV2-Style Visualizer & Real-Time Railway HUD Dashboard
+Drishti Kavach: High-Contrast Track Visualizer & Real-Time Railway HUD Dashboard
 
 Features:
   - Exact Pristine Color Rendering:
@@ -18,7 +18,7 @@ from src.spatial_reasoning.hazard_analyzer import HazardAssessment
 
 class DrishtiVisualizer:
     """
-    Renders high-contrast BiSeNetV2 segmentation masks, obstacle bounding boxes,
+    Renders high-contrast track segmentation masks, obstacle bounding boxes,
     and the real-time Kavach ATP telemetry HUD.
     """
 
@@ -154,7 +154,7 @@ class DrishtiVisualizer:
     ) -> np.ndarray:
         """
         Renders full visualizer output:
-        1. BiSeNetV2 track bed & rail lines masks
+        1. High-contrast track bed & rail lines masks
         2. Hazard bounding boxes with dynamic threat badges
         3. Real-time Kavach telemetry HUD
         """
@@ -205,7 +205,7 @@ class DrishtiVisualizer:
 
             (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_DUPLEX, 0.58, 1)
             
-            badge_y1 = max(0, y1 - th - 12)
+            badge_y1 = max(0, y_min if 'y_min' in locals() else y1 - th - 12, y1 - th - 12)
             badge_y2 = max(th + 12, y1)
             badge_x2 = min(w, x1 + tw + 16)
 

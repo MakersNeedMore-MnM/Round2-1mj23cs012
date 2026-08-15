@@ -28,7 +28,7 @@ The Drishti Kavach pipeline comprises four core functional subsystems:
      - **WARNING**: Obstacle within the lateral clearance envelope buffer.
      - **SAFE**: Obstacle located outside track clearance zones.
 
-4. **BiSeNetV2-Style High-Contrast HUD Dashboard**:
+4. **High-Contrast Telemetry HUD Dashboard**:
    - Translucent Cyan-Blue track bed overlay and glowing emerald green rail lines.
    - Color-coded threat bounding boxes with dynamic confidence and distance badges.
    - Real-time telemetry bar indicating system state, frame rate, sensor channel, and active hazards.
@@ -76,7 +76,7 @@ drishti-kavach/
 │   ├── spatial_reasoning/
 │   │   └── hazard_analyzer.py        # Geometric polygon clearance reasoning engine
 │   └── visualization/
-│       └── visualizer.py             # High-contrast BiSeNetV2 visualizer and HUD renderer
+│       └── visualizer.py             # High-contrast track overlay and telemetry HUD visualizer
 ├── run_inference.py                  # CLI runner for webcam, video, and image streams
 ├── requirements.txt                  # Python package dependencies
 └── .gitignore
