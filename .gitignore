@@ -40,6 +40,9 @@ models/*.onnx
 outputs/*
 !outputs/.gitkeep
 
+# Research Paper (Local Only)
+paper/
+
 # LaTeX Compilation Artifacts
 *.aux
 *.log
