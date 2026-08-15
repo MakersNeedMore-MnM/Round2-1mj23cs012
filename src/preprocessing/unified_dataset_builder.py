@@ -1,8 +1,14 @@
 """
 Drishti Kavach: Unified RailDrishti Dataset Preprocessing Engine
 
-Correctly namespaces V1 Track Segmentation and V2 Obstacle Detection datasets
-into a unified multi-task dataset (Daylight + Active IR CCTV).
+Usage:
+  python src/preprocessing/unified_dataset_builder.py
+
+Features:
+  - Correctly namespaces V1 Track Segmentation and V2 Obstacle Detection datasets
+  - Extracts native 1080p full-resolution ground-truth masks from 2.1 Labelling
+  - Produces unified multi-task dataset (Daylight + Active IR CCTV) at 'dataset_rail-drishti/'
+  - Automatically generates 'configs/raildrishti_dataset.yaml'
 """
 
 import os
@@ -184,7 +190,6 @@ def build_unified_dataset(dataset_root: str = "dataset_uav-rsod", output_root: s
     print(f" Output Directory: {output_root}")
     print("=" * 70)
 
-    # Clean existing directory to ensure fresh build
     if os.path.exists(output_root):
         shutil.rmtree(output_root)
 
@@ -199,9 +204,7 @@ def build_unified_dataset(dataset_root: str = "dataset_uav-rsod", output_root: s
     stats = {k: 0 for k in CLASS_MAPPING.keys()}
     total_images = 0
 
-    # -------------------------------------------------------------
     # 1. Process V1 Track Segmentation (Day + Night CCTV)
-    # -------------------------------------------------------------
     v1_orig_dir = os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation/1 Images")
     v1_lbl_in_dir = os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation/2 Annotations/2.1 Labelling/Rail Inside")
     v1_lbl_ln_dir = os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation/2 Annotations/2.1 Labelling/Rail Lines")
@@ -209,7 +212,6 @@ def build_unified_dataset(dataset_root: str = "dataset_uav-rsod", output_root: s
     v1_images = sorted(glob.glob(os.path.join(v1_orig_dir, "*.jpg")))
     print(f"\nProcessing {len(v1_images)} V1 Track Segmentation images (Day + Night IR)...")
 
-    # Group base IDs to prevent train/val leakage between day and night of same scene
     v1_bases = sorted(list({os.path.basename(f).replace("night_", "").split(".")[0] for f in v1_images}))
     random.shuffle(v1_bases)
     val_cut_v1 = int(len(v1_bases) * 0.15)
@@ -228,10 +230,8 @@ def build_unified_dataset(dataset_root: str = "dataset_uav-rsod", output_root: s
         out_fname = f"v1_seg_{fname}"
         out_lbl_name = f"v1_seg_{base}.txt"
 
-        # Copy image
         shutil.copy(img_path, os.path.join(dst_img_dir, out_fname))
 
-        # Extract Ground Truth Masks from 2.1 Labelling
         orig_img_ref = os.path.join(v1_orig_dir, raw_fname)
         lbl_in_ref = os.path.join(v1_lbl_in_dir, raw_fname)
         lbl_ln_ref = os.path.join(v1_lbl_ln_dir, raw_fname)
@@ -258,9 +258,7 @@ def build_unified_dataset(dataset_root: str = "dataset_uav-rsod", output_root: s
 
         total_images += 1
 
-    # -------------------------------------------------------------
     # 2. Process V2 Obstacle Detection (Day + Night CCTV)
-    # -------------------------------------------------------------
     v2_train_dir = os.path.join(dataset_root, "V2 UAV-RSOD_Dataset for Obstacle Detection/images/train")
     v2_test_dir = os.path.join(dataset_root, "V2 UAV-RSOD_Dataset for Obstacle Detection/images/test")
 

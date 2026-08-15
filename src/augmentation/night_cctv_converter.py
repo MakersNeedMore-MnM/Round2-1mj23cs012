@@ -1,5 +1,13 @@
 """
 Drishti Kavach: Active IR CCTV (850nm) Sensor Simulation Engine
+
+CLI Flags & Usage:
+  --preview     : Generate Daylight vs Active IR (850nm) comparison preview
+  --convert-all : Batch convert all dataset images to Active IR CCTV format
+  --workers INT : Number of parallel CPU worker processes (default: 8)
+
+Example:
+  python src/augmentation/night_cctv_converter.py --convert-all --workers 8
 """
 
 import os

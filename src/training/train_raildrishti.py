@@ -1,8 +1,17 @@
 """
 Drishti Kavach: Training Engine for Unified "RailDrishti" Model
-Features:
-- Clean Terminal Output with Plain-English Epoch Progress Callbacks
-- Automatic Resume Support: Continues seamlessly from last.pt if interrupted with Ctrl+C
+
+CLI Flags & Usage:
+  --epochs INT     : Number of training epochs (default: 40)
+  --batch INT      : Batch size per iteration (default: 8)
+  --imgsz INT      : Input image resolution (default: 1024)
+  --model STR      : Base YOLO segmentation model weights (default: yolo11s-seg.pt)
+  --device STR     : Compute device: 'mps' (Apple Silicon), '0' (CUDA GPU), 'cpu'
+  --resume         : Force resume training from latest checkpoint ('last.pt')
+  --fresh          : Force start training from epoch 0 (ignore existing checkpoints)
+
+Example:
+  python src/training/train_raildrishti.py --epochs 40 --batch 8 --imgsz 1024
 """
 
 import os
@@ -12,10 +21,9 @@ import shutil
 import warnings
 import argparse
 
-# 1. Suppress all non-essential Python and library warnings
+# Suppress non-essential warnings
 warnings.filterwarnings("ignore")
 os.environ["PYTHONWARNINGS"] = "ignore"
-os.environ["YOLO_VERBOSE"] = "False"
 
 import torch
 from ultralytics import YOLO
@@ -29,7 +37,6 @@ def on_epoch_end_callback(trainer):
     epoch = trainer.epoch + 1
     total_epochs = trainer.epochs
     
-    # Extract validation metrics safely
     metrics = trainer.metrics if hasattr(trainer, "metrics") else {}
     
     box_map50 = metrics.get("metrics/mAP50(B)", 0.0) * 100.0
@@ -53,20 +60,19 @@ def on_epoch_end_callback(trainer):
         status = "Excellent performance! (Superb accuracy on tracks & small sabotage items)"
         rating = "Outstanding"
         
-    next_action = f"Continuing to Epoch {epoch + 1}/{total_epochs}..." if epoch < total_epochs else "Training Complete!"
+    next_action = f"Proceeding to Epoch {epoch + 1}/{total_epochs}..." if epoch < total_epochs else "Training Complete!"
     
-    print(f"\n[Epoch {epoch:2d}/{total_epochs:2d}] Box mAP: {box_map50:5.1f}% | Mask mAP: {mask_map50:5.1f}% | Rating: {rating:<11} | {status} | {next_action}")
+    print("\n" + "-" * 80)
+    print(f" 📊 [Epoch {epoch:2d}/{total_epochs:2d}] Box mAP: {box_map50:5.1f}% | Mask mAP: {mask_map50:5.1f}% | Rating: {rating:<11}")
+    print(f"    Summary: {status}")
+    print(f"    Status:  {next_action}")
+    print("-" * 80 + "\n")
 
 
 def find_latest_checkpoint():
     """Locates the latest checkpoint file to resume from."""
-    potential_checkpoints = [
-        "runs/segment/RailDrishti_Training/weights/last.pt",
-        "runs/segment/RailDrishti_Training*/weights/last.pt"
-    ]
     matches = glob.glob("runs/segment/**/weights/last.pt", recursive=True)
     if matches:
-        # Return the most recently modified checkpoint
         matches.sort(key=os.path.getmtime, reverse=True)
         return matches[0]
     return None
@@ -104,19 +110,19 @@ def train_raildrishti(
     latest_ckpt = find_latest_checkpoint() if not fresh_start else None
 
     if (resume or latest_ckpt) and not fresh_start:
-        print(f"\n[+] RESUMING TRAINING: Found existing checkpoint at '{latest_ckpt}'")
+        print(f"\n[+] RESUMING TRAINING from: '{latest_ckpt}'")
         print(f" • Hardware Device: {dev_name}")
         print(" • Resuming from exact interrupted epoch...\n" + "=" * 80 + "\n")
         
         try:
             model = YOLO(latest_ckpt)
             model.add_callback("on_fit_epoch_end", on_epoch_end_callback)
-            model.train(resume=True)
+            model.train(resume=True, verbose=True)
         except KeyboardInterrupt:
             print("\n\n" + "=" * 80)
             print(" [!] Training paused by user (Ctrl+C).")
             print(f" [!] Checkpoint saved to: {latest_ckpt}")
-            print(" [!] Re-run this exact command anytime to resume automatically from this epoch!")
+            print(" [!] Re-run this command anytime to resume seamlessly from this epoch!")
             print("=" * 80)
             return
     else:
@@ -126,7 +132,8 @@ def train_raildrishti(
         print(f" • Batch Size:          {batch_size}")
         print(f" • Hardware Device:     {dev_name}")
         print(f" • Dataset Config:      {dataset_yaml}")
-        print("=" * 80 + "\n")
+        print("=" * 80)
+        print("\n[+] Initializing dataset cache and GPU tensors... Starting Epoch 1 now!\n")
 
         try:
             model = YOLO(base_model)
@@ -156,7 +163,7 @@ def train_raildrishti(
                 fliplr=0.5,
                 mosaic=0.7,
                 val=True,
-                verbose=False
+                verbose=True
             )
         except KeyboardInterrupt:
             saved_ckpt = find_latest_checkpoint()
@@ -164,7 +171,7 @@ def train_raildrishti(
             print(" [!] Training paused by user (Ctrl+C).")
             if saved_ckpt:
                 print(f" [!] Checkpoint successfully saved to: {saved_ckpt}")
-                print(" [!] Re-run this exact command anytime to resume automatically from this epoch!")
+                print(" [!] Re-run this command anytime to resume seamlessly from this point!")
             print("=" * 80)
             return
 
@@ -187,8 +194,8 @@ if __name__ == "__main__":
     parser.add_argument("--imgsz", type=int, default=1024, help="Input resolution (e.g. 1024 or 640)")
     parser.add_argument("--model", type=str, default="yolo11s-seg.pt", help="Base YOLO weights")
     parser.add_argument("--device", type=str, default=None, help="Device ('mps', '0', 'cpu')")
-    parser.add_argument("--resume", action="store_true", help="Explicitly force resume from checkpoint")
-    parser.add_argument("--fresh", action="store_true", help="Force fresh start from epoch 0 (ignore existing checkpoints)")
+    parser.add_argument("--resume", action="store_true", help="Force resume from checkpoint")
+    parser.add_argument("--fresh", action="store_true", help="Force fresh start from epoch 0")
     args = parser.parse_args()
 
     train_raildrishti(

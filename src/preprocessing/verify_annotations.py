@@ -1,6 +1,13 @@
 """
 Drishti Kavach: High-Precision Annotation Verification Tool
-Exact pristine rendering matching pristine_test with bright Cyan-Blue track bed, Glowing Green rails, and Red obstacles.
+
+Usage:
+  python src/preprocessing/verify_annotations.py
+
+Features:
+  - Visualizes parsed ground-truth segmentation masks (Vibrant Cyan-Blue Track Bed, Glowing Green Rail Lines)
+  - Visualizes multi-class Obstacle Bounding Boxes (Bright Red with drop-shadow badges)
+  - Saves annotated validation samples to 'outputs/verification_samples/'
 """
 
 import os
@@ -10,7 +17,7 @@ import cv2
 import numpy as np
 import yaml
 
-# Color Palette matching pristine_test exactly:
+# Color Palette:
 # Track Bed: Bright Cyan/Blue (255, 180, 0)
 # Rail Lines: Glowing Green (0, 255, 100)
 # Obstacles: Bright Red (0, 0, 255)
@@ -63,7 +70,7 @@ def visualize_annotations(
             continue
         h, w = img.shape[:2]
         
-        # Single Unified Overlay Layer (exact math as pristine_test)
+        # Single Unified Overlay Layer
         overlay = img.copy()
         obstacle_items = []
         has_track = False
@@ -87,17 +94,17 @@ def visualize_annotations(
                 pts_np = np.array(pts, np.int32).reshape((-1, 1, 2))
                 cname = names.get(cls_id, f"cls_{cls_id}")
 
-                if cls_id == 0:  # Rail_Track_Bed (Pristine Cyan Blue)
+                if cls_id == 0:  # Rail_Track_Bed (Cyan Blue)
                     cv2.fillPoly(overlay, [pts_np], COLOR_TRACK_BED)
                     has_track = True
-                elif cls_id == 1:  # Rail_Lines (Pristine Glowing Green Rails)
+                elif cls_id == 1:  # Rail_Lines (Glowing Green Rails)
                     cv2.fillPoly(overlay, [pts_np], COLOR_RAIL_LINES)
                     cv2.polylines(overlay, [pts_np], True, COLOR_RAIL_LINES, 2, cv2.LINE_AA)
                     has_track = True
                 else:  # Obstacle (Bright Red)
                     obstacle_items.append((cls_id, cname, pts_np))
 
-        # Single 50/50 Alpha Blend matching pristine_test exactly
+        # Single 50/50 Alpha Blend
         if has_track:
             blended = cv2.addWeighted(overlay, 0.50, img, 0.50, 0)
         else:
