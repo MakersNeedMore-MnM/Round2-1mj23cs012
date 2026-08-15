@@ -26,7 +26,15 @@ warnings.filterwarnings("ignore")
 os.environ["PYTHONWARNINGS"] = "ignore"
 
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO, settings
+
+# Ensure Ultralytics paths are locked to current project directory
+PROJECT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+settings.update({
+    "runs_dir": os.path.join(PROJECT_ROOT, "runs"),
+    "weights_dir": os.path.join(PROJECT_ROOT, "weights"),
+    "datasets_dir": PROJECT_ROOT
+})
 
 
 def on_epoch_end_callback(trainer):
@@ -69,9 +77,9 @@ def on_epoch_end_callback(trainer):
     print("-" * 80 + "\n")
 
 
-def find_latest_checkpoint():
-    """Locates the latest checkpoint file to resume from."""
-    matches = glob.glob("runs/segment/**/weights/last.pt", recursive=True)
+def find_latest_checkpoint(project_dir: str):
+    """Locates the latest checkpoint file to resume from within the local project."""
+    matches = glob.glob(os.path.join(project_dir, "**/weights/last.pt"), recursive=True)
     if matches:
         matches.sort(key=os.path.getmtime, reverse=True)
         return matches[0]
@@ -107,11 +115,13 @@ def train_raildrishti(
     else:
         dev_name = device
 
-    latest_ckpt = find_latest_checkpoint() if not fresh_start else None
+    project_save_dir = os.path.join(PROJECT_ROOT, "runs", "segment")
+    latest_ckpt = find_latest_checkpoint(project_save_dir) if not fresh_start else None
 
     if (resume or latest_ckpt) and not fresh_start:
         print(f"\n[+] RESUMING TRAINING from: '{latest_ckpt}'")
-        print(f" • Hardware Device: {dev_name}")
+        print(f" • Project Directory:   {PROJECT_ROOT}")
+        print(f" • Hardware Device:     {dev_name}")
         print(" • Resuming from exact interrupted epoch...\n" + "=" * 80 + "\n")
         
         try:
@@ -126,7 +136,8 @@ def train_raildrishti(
             print("=" * 80)
             return
     else:
-        print(f" • Model Architecture:  {base_model} (Unified Multi-Task Segmentation & Detection)")
+        print(f" • Base Architecture:   {base_model} (Unified Segmentation & Detection)")
+        print(f" • Working Directory:   {PROJECT_ROOT}")
         print(f" • Target Resolution:   {imgsz}x{imgsz}")
         print(f" • Training Epochs:     {epochs}")
         print(f" • Batch Size:          {batch_size}")
@@ -145,8 +156,9 @@ def train_raildrishti(
                 imgsz=imgsz,
                 batch=batch_size,
                 device=device,
-                workers=8,
+                project=project_save_dir,
                 name="RailDrishti_Training",
+                workers=8,
                 save=True,
                 save_period=5,
                 patience=12,
@@ -166,7 +178,7 @@ def train_raildrishti(
                 verbose=True
             )
         except KeyboardInterrupt:
-            saved_ckpt = find_latest_checkpoint()
+            saved_ckpt = find_latest_checkpoint(project_save_dir)
             print("\n\n" + "=" * 80)
             print(" [!] Training paused by user (Ctrl+C).")
             if saved_ckpt:
