@@ -15,11 +15,15 @@ build/
 .DS_Store
 Thumbs.db
 
-# Large Datasets (Raw & Processed)
+# Large Datasets & Archives (Raw & Processed)
 dataset_uav-rsod/
 dataset_rail-drishti/
 !dataset_rail-drishti/.gitkeep
 processed_data/
+*.zip
+*.tar
+*.tar.gz
+*.rar
 
 # Model Checkpoints, Pretrained Weights, and Training Runs
 runs/
