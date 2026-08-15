@@ -1,0 +1,43 @@
+# Python Environment & Bytecode
+.venv/
+env/
+venv/
+ENV/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Large Datasets (Raw & Processed)
+dataset_uav-rsod/
+dataset_rail-drishti/
+!dataset_rail-drishti/.gitkeep
+processed_data/
+
+# Model Checkpoints, Pretrained Weights, and Training Runs
+runs/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+models/*.pt
+models/*.onnx
+!models/.gitkeep
+
+# Output Images, Videos, and Verification Samples
+outputs/*
+!outputs/.gitkeep
+
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
