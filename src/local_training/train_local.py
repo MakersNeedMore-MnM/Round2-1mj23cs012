@@ -7,6 +7,7 @@ Supported Environments:
   - Linux / Ubuntu (NVIDIA CUDA or Multi-core CPU)
 
 Features:
+  - Robust Checkpoint Resumption with automated last.pt path discovery.
   - Automatic hardware detection and memory tuning across all platforms.
   - Multi-task YOLO11-seg instance segmentation and 11-class hazard detection.
   - Suppresses all non-critical Python / PyTorch / OpenCV runtime warnings.
@@ -20,12 +21,13 @@ Usage:
   # 2. High-Precision Training (1024px full resolution):
   python src/local_training/train_local.py --epochs 40 --batch 4 --imgsz 1024
 
-  # 3. Resume interrupted training:
+  # 3. Resume interrupted training (Automatically finds last.pt):
   python src/local_training/train_local.py --resume
 """
 
 import os
 import sys
+import glob
 import shutil
 import argparse
 import platform
@@ -178,12 +180,39 @@ def check_system_hardware() -> tuple:
     return device, workers
 
 
+def find_checkpoint(project_root: str, explicit_path: str = None) -> str:
+    """Finds the most relevant last.pt checkpoint to resume training."""
+    if explicit_path and os.path.exists(explicit_path):
+        return os.path.abspath(explicit_path)
+
+    candidates = [
+        os.path.join(project_root, "runs/segment/raildrishti_local/weights/last.pt"),
+        os.path.join(project_root, "runs/segment/raildrishti_mac/weights/last.pt"),
+        os.path.join(project_root, "runs/segment/runs/segment/raildrishti_local/weights/last.pt"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+
+    # Search all subdirectories in runs/
+    all_lasts = glob.glob(os.path.join(project_root, "runs/**/weights/last.pt"), recursive=True)
+    if not all_lasts:
+        all_lasts = glob.glob(os.path.join(project_root, "runs/**/last.pt"), recursive=True)
+
+    if all_lasts:
+        all_lasts.sort(key=os.path.getmtime, reverse=True)
+        return os.path.abspath(all_lasts[0])
+
+    return None
+
+
 def train_raildrishti(args):
     # Determine project root and paths cross-platform
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    data_yaml = os.path.join(project_root, args.data)
-    weights_path = os.path.join(project_root, args.weights) if not os.path.isabs(args.weights) else args.weights
-    output_model_path = os.path.join(project_root, "models/RailDrishti.pt")
+    data_yaml = os.path.abspath(os.path.join(project_root, args.data))
+    weights_path = os.path.abspath(os.path.join(project_root, args.weights)) if not os.path.isabs(args.weights) else args.weights
+    output_model_path = os.path.abspath(os.path.join(project_root, "models/RailDrishti.pt"))
+    project_dir = os.path.abspath(os.path.join(project_root, "runs/segment"))
 
     if not os.path.exists(data_yaml):
         print(f"[ERROR] Dataset configuration file not found at: {data_yaml}")
@@ -193,75 +222,93 @@ def train_raildrishti(args):
     device = args.device if args.device is not None else detected_device
     workers = args.workers if args.workers is not None else default_workers
 
-    print("=" * 65)
-    print(" STARTING LOCAL RAILDISHTI TRAINING")
-    print("=" * 65)
-    print(f" • Dataset Config  : {data_yaml}")
-    print(f" • Base Weights    : {weights_path}")
-    print(f" • Epochs          : {args.epochs}")
-    print(f" • Batch Size      : {args.batch}")
-    print(f" • Input Image Size: {args.imgsz}x{args.imgsz}")
-    print(f" • Device          : {device}")
-    print(f" • CPU Workers     : {workers}")
-    print(f" • Optimizer       : {args.optimizer}")
-    print(f" • Learning Rate   : lr0={args.lr0}, lrf={args.lrf}")
-    print("=" * 65 + "\n")
-
-    # Load base model
+    # Resuming vs Fresh Training
     if args.resume:
-        last_weights = os.path.join(project_root, "runs/segment/raildrishti_local/weights/last.pt")
-        if not os.path.exists(last_weights):
-            last_weights = os.path.join(project_root, "runs/segment/raildrishti_mac/weights/last.pt")
-        if not os.path.exists(last_weights):
-            print(f"[ERROR] Cannot resume: checkpoint not found at {last_weights}")
+        last_weights = find_checkpoint(project_root, args.checkpoint)
+        if last_weights is None or not os.path.exists(last_weights):
+            print(f"[ERROR] Cannot resume: No previous checkpoint (last.pt) found in runs/ directory.")
+            print(f"        Start a fresh training run using:")
+            print(f"        python src/local_training/train_local.py --epochs 40 --batch 8 --imgsz 640")
             sys.exit(1)
-        print(f"[+] Resuming training from checkpoint: {last_weights}")
+
+        print("=" * 65)
+        print(" RESUMING LOCAL RAILDISHTI TRAINING")
+        print("=" * 65)
+        print(f" • Checkpoint File : {last_weights}")
+        print(f" • Compute Device  : {device}")
+        print("=" * 65 + "\n")
+
         model = YOLO(last_weights)
-        resume_flag = True
+
+        # Attach Custom Real-World Epoch Monitor Callback
+        monitor = EpochStatusMonitor()
+        model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
+
+        # In Ultralytics, resume=True cleanly restores all parameters from checkpoint
+        results = model.train(resume=True, device=device)
+
     else:
+        print("=" * 65)
+        print(" STARTING FRESH LOCAL RAILDISHTI TRAINING")
+        print("=" * 65)
+        print(f" • Dataset Config  : {data_yaml}")
+        print(f" • Base Weights    : {weights_path}")
+        print(f" • Epochs          : {args.epochs}")
+        print(f" • Batch Size      : {args.batch}")
+        print(f" • Input Image Size: {args.imgsz}x{args.imgsz}")
+        print(f" • Device          : {device}")
+        print(f" • CPU Workers     : {workers}")
+        print(f" • Optimizer       : {args.optimizer}")
+        print(f" • Learning Rate   : lr0={args.lr0}, lrf={args.lrf}")
+        print("=" * 65 + "\n")
+
         model = YOLO(weights_path)
-        resume_flag = False
 
-    # Attach Custom Real-World Epoch Monitor Callback
-    monitor = EpochStatusMonitor()
-    model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
+        # Attach Custom Real-World Epoch Monitor Callback
+        monitor = EpochStatusMonitor()
+        model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
 
-    # Execute training
-    results = model.train(
-        data=data_yaml,
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=device,
-        workers=workers,
-        optimizer=args.optimizer,
-        lr0=args.lr0,
-        lrf=args.lrf,
-        momentum=0.937,
-        weight_decay=0.0005,
-        warmup_epochs=3.0,
-        patience=15,
-        project="runs/segment",
-        name="raildrishti_local",
-        exist_ok=True,
-        save=True,
-        save_period=5,
-        plots=True,
-        verbose=True,
-        resume=resume_flag
-    )
+        results = model.train(
+            data=data_yaml,
+            epochs=args.epochs,
+            imgsz=args.imgsz,
+            batch=args.batch,
+            device=device,
+            workers=workers,
+            optimizer=args.optimizer,
+            lr0=args.lr0,
+            lrf=args.lrf,
+            momentum=0.937,
+            weight_decay=0.0005,
+            warmup_epochs=3.0,
+            patience=15,
+            project=project_dir,
+            name="raildrishti_local",
+            exist_ok=True,
+            save=True,
+            save_period=5,
+            plots=True,
+            verbose=True
+        )
 
     print("\n" + "=" * 65)
     print(" TRAINING COMPLETE: EXPORTING WEIGHTS")
     print("=" * 65)
 
-    best_pt = os.path.join(project_root, "runs/segment/raildrishti_local/weights/best.pt")
+    best_pt = os.path.join(project_dir, "raildrishti_local/weights/best.pt")
+    if not os.path.exists(best_pt):
+        # Fallback search
+        found_bests = glob.glob(os.path.join(project_root, "runs/**/weights/best.pt"), recursive=True)
+        if found_bests:
+            found_bests.sort(key=os.path.getmtime, reverse=True)
+            best_pt = found_bests[0]
+
     if os.path.exists(best_pt):
         os.makedirs(os.path.dirname(output_model_path), exist_ok=True)
         shutil.copy(best_pt, output_model_path)
         print(f"[+] Best trained weights successfully saved to: {output_model_path}")
     else:
-        print(f"[!] Warning: {best_pt} not found. Check runs/segment/raildrishti_local/weights/")
+        print(f"[!] Warning: {best_pt} not found. Check runs/ directory.")
 
     # Run quick validation on validation split
     print("\nEvaluating trained model on validation set...")
@@ -291,6 +338,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drishti Kavach Universal Local Training")
     parser.add_argument("--data", type=str, default="configs/raildrishti_dataset.yaml", help="Path to dataset YAML")
     parser.add_argument("--weights", type=str, default="yolo11s-seg.pt", help="Pretrained base weights")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Explicit checkpoint file path to resume from")
     parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs (default: 40)")
     parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size (640 for fast laptop training, 1024 for high-res)")
