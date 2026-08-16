@@ -1,41 +1,44 @@
 # Drishti Kavach: AI-Powered Railway Obstacle and Track Clearance Perception System
 
-Drishti Kavach is a computer vision perception and spatial clearance reasoning framework designed to augment Automatic Train Protection (ATP) systems, such as the Indian Railways' Kavach. 
+**Drishti Kavach** is an indigenous computer vision perception and spatial clearance reasoning framework designed to augment Automatic Train Protection (ATP) systems, such as the Indian Railways' **Kavach**.
 
-While conventional ATP platforms prevent signal passing at danger (SPAD) and head-on/rear-end collisions through RFID and trackside radio telemetry, Drishti Kavach provides real-time optical track clearance monitoring, foreign object detection, and dynamic clearance envelope breach analysis across both daylight RGB and active infrared (850nm NIR) night surveillance feeds.
+While conventional ATP platforms enforce speed governance and prevent Signal Passed at Danger (SPAD) or head-on/rear-end collisions through RFID transponders and trackside UHF radio telemetry, Drishti Kavach provides real-time forward optical track clearance monitoring, physical sabotage detection (iron rods, boulders), livestock/pedestrian intrusion analysis, and dynamic safety envelope reasoning across both daylight RGB and Active Infrared (850nm NIR) nocturnal CCTV streams.
 
 ---
 
 ## System Architecture
 
-The Drishti Kavach pipeline comprises four core functional subsystems:
+The Drishti Kavach pipeline comprises five core subsystems:
 
-1. **Multi-Task Neural Network (RailDrishti)**:
+1. **Multi-Task Neural Network (`RailDrishti`)**:
    - Unified instance segmentation and object detection model (YOLO11-seg).
-   - Simultaneously predicts continuous track bed polygons (`Rail_Track_Bed`), individual rail line paths (`Rail_Lines`), and multi-class foreign obstacle bounding boxes in a single forward pass.
+   - Simultaneously predicts continuous track bed polygons (`Rail_Track_Bed`), individual rail line paths (`Rail_Lines`), and 11-class foreign obstacle bounding boxes in a single forward pass.
 
-2. **Optical Weather Enhancement Engine**:
-   - Real-time atmospheric haze index estimation.
+2. **Adverse Weather Optical Enhancement Engine**:
+   - Real-time atmospheric haze estimation.
    - Contrast Limited Adaptive Histogram Equalization (CLAHE) in the LAB luminance domain.
-   - Atmospheric Scattering Model inversion via Dark Channel Prior (DCP) defogging.
+   - Koschmieder atmospheric scattering model inversion via Dark Channel Prior (DCP) defogging.
    - Temporal multi-frame median filtering for rain streak suppression.
 
 3. **Spatial Hazard and Clearance Analyzer**:
-   - Vector geometry computation using polygon intersections.
-   - Evaluates obstacle ground-contact footprints against track geometry and lateral safety envelopes.
+   - 2D planar vector geometry computation using Shapely.
+   - Evaluates obstacle ground-contact footprints against track geometry and dilated lateral safety envelopes.
    - Categorizes targets into:
-     - **CRITICAL**: Obstacle directly within the track bed or rail lines (Collision Threat).
-     - **WARNING**: Obstacle within the lateral clearance envelope buffer.
+     - **CRITICAL**: Obstacle directly within the track bed or rail lines (Emergency Braking).
+     - **WARNING**: Obstacle within the lateral clearance envelope buffer (Caution).
      - **SAFE**: Obstacle located outside track clearance zones.
 
 4. **High-Contrast Telemetry HUD Dashboard**:
    - Translucent Cyan-Blue track bed overlay and glowing emerald green rail lines.
-   - Color-coded threat bounding boxes with dynamic confidence and distance badges.
-   - Real-time telemetry bar indicating system state, frame rate, sensor channel, and active hazards.
+   - Crisp threat bounding boxes with ground-contact anchor reticles.
+   - Large, clean, old-school top status header with live FPS, sensor channel, and dynamic safety alerts.
+
+5. **Universal Training & Validation Pipeline**:
+   - Real-world readiness benchmark evaluator comparing training progress against actual Indian Railways operational deployment standards ($\ge 85\%$ mAP).
 
 ---
 
-## Class Taxonomy
+## Class Taxonomy (11 Classes)
 
 | Class ID | Label | Category | Description |
 | :--- | :--- | :--- | :--- |
@@ -58,15 +61,21 @@ The Drishti Kavach pipeline comprises four core functional subsystems:
 ```
 drishti-kavach/
 ├── configs/
-│   └── raildrishti_dataset.yaml      # Multi-task dataset configuration
-├── models/                           # Target directory for trained weights (RailDrishti.pt)
-├── outputs/                          # Generated outputs, snapshots, and verification samples
+│   └── raildrishti_dataset.yaml      # Multi-task dataset configuration (Relative paths)
+├── models/                           # Production directory for trained weights (RailDrishti.pt)
+├── outputs/                          # Generated outputs, snapshots, HUD & day/night previews
+│   ├── day_vs_night_previews/        # Side-by-side active IR CCTV conversion samples
+│   ├── hud_previews/                 # Rendered Head-Up Display telemetry previews
+│   ├── inference_results/            # Recorded inference video streams & images
+│   └── snapshots/                    # High-resolution uncompressed image captures
 ├── src/
 │   ├── augmentation/
 │   │   └── night_cctv_converter.py   # Active IR (850nm NIR) physics-based sensor simulator
 │   ├── colab_training/
 │   │   ├── package_for_colab.py      # Dataset compression utility for Google Colab
-│   │   └── train_on_colab.ipynb      # Cloud GPU (Tesla T4) training notebook
+│   │   └── train_on_colab.ipynb      # Cloud GPU (Tesla T4) training notebook with live monitor
+│   ├── local_training/
+│   │   └── train_local.py            # Universal local trainer (Mac MPS, Windows, Linux, Intel/AMD)
 │   ├── pipeline/
 │   │   ├── drishti_engine.py         # Real-time perception and reasoning coordinator
 │   │   └── weather_enhancer.py       # Adaptive defogging, CLAHE, and rain filter engine
@@ -75,9 +84,12 @@ drishti-kavach/
 │   │   └── verify_annotations.py     # Ground-truth annotation visualizer
 │   ├── spatial_reasoning/
 │   │   └── hazard_analyzer.py        # Geometric polygon clearance reasoning engine
-│   └── visualization/
-│       └── visualizer.py             # High-contrast track overlay and telemetry HUD visualizer
-├── run_inference.py                  # CLI runner for webcam, video, and image streams
+│   ├── visualization/
+│   │   ├── generate_hud_preview.py   # HUD preview generator
+│   │   └── visualizer.py             # High-contrast track overlay and telemetry HUD visualizer
+│   └── camera_tester.py              # Hardware diagnostics and live camera snapshot tool
+├── ALL_IN_ONE_GUIDE.md               # Full end-to-end technical guide and research methodology
+├── run_inference.py                  # CLI runner for live webcams, videos, and RTSP streams
 ├── requirements.txt                  # Python package dependencies
 └── .gitignore
 ```
@@ -91,7 +103,7 @@ drishti-kavach/
 ```bash
 # Create virtual environment with Python 3.11
 python3.11 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -110,21 +122,61 @@ python src/preprocessing/unified_dataset_builder.py
 python src/preprocessing/verify_annotations.py
 ```
 
-### 3. Model Training (Google Colab GPU)
+---
+
+## Model Training
+
+### Option A: Local Laptop Training (Mac MPS, Windows, Linux)
+
+Train directly on your machine with automatic hardware detection and the **Real-World Readiness Monitor**:
+
+```bash
+# Fast training (Recommended for laptops - 640px resolution):
+python src/local_training/train_local.py --epochs 40 --batch 8 --imgsz 640
+
+# High-precision full-resolution training (1024px):
+python src/local_training/train_local.py --epochs 40 --batch 4 --imgsz 1024
+
+# Resume an interrupted session:
+python src/local_training/train_local.py --resume
+```
+*Trained weights are automatically saved to `models/RailDrishti.pt` upon completion.*
+
+### Option B: Cloud GPU Training (Google Colab)
 
 1. Compress the dataset:
    ```bash
    python src/colab_training/package_for_colab.py
    ```
-2. Upload `raildrishti_colab.zip` to Google Drive.
-3. Open `src/colab_training/train_on_colab.ipynb` in Google Colab, select a T4 GPU runtime, and run all cells.
-4. Place the downloaded `RailDrishti.pt` checkpoint into the local `models/` directory (`models/RailDrishti.pt`).
+2. Upload `raildrishti_colab.zip` to Google Drive root folder (`MyDrive`).
+3. Open `src/colab_training/train_on_colab.ipynb` in Google Colab, select an **NVIDIA T4 GPU** runtime, and run all cells.
+4. Place the downloaded `RailDrishti.pt` weight file into the local `models/` directory (`models/RailDrishti.pt`).
+
+---
+
+## Camera Hardware Diagnostics
+
+Before running live tests, verify connected cameras and capture uncompressed test snapshots:
+
+```bash
+# 1. Scan and list all connected USB / UVC cameras:
+python src/camera_tester.py --scan
+
+# 2. Open live 1080p camera feed:
+python src/camera_tester.py --cam 0
+
+# Interactive Controls:
+#   [S] / [SPACE] : Save snapshot to outputs/snapshots/
+#   [C]           : Switch to next connected camera index
+#   [F]           : Toggle Fullscreen
+#   [Q] / [ESC]   : Quit
+```
 
 ---
 
 ## Real-Time Inference and Deployment
 
-### 1. Live USB Webcam Stream (Daylight Station Testing)
+### 1. Live USB Webcam Stream (Station & Field Testing)
 ```bash
 python run_inference.py --source 0 --weather auto
 ```
@@ -136,22 +188,21 @@ python run_inference.py --source 0 --sensor "850nm ACTIVE IR CCTV"
 
 ### 3. Processing Video Files with Output Recording
 ```bash
-python run_inference.py --source path/to/rail_video.mp4 --weather auto --save
+python run_inference.py --source data/rail_video.mp4 --weather auto --save
 ```
 
 ### 4. Interactive HUD Keyboard Controls
-
 During active video playback:
-- **`[D]`**: Cycle weather enhancement modes (`Auto` -> `CLAHE` -> `DCP Defog` -> `Rain Filter` -> `Off`).
-- **`[H]`**: Toggle the HUD telemetry overlay.
+- **`[D]`**: Cycle optical weather enhancement (`Auto` -> `CLAHE` -> `DCP Defog` -> `Rain Filter` -> `Off`).
+- **`[H]`**: Toggle the HUD telemetry overlay on/off.
 - **`[S]`**: Save high-resolution snapshot to `outputs/snapshots/`.
 - **`[SPACE]`**: Pause or resume playback.
-- **`[Q]` / `[ESC]`**: Terminate inference stream.
+- **`[Q]` / `[ESC]`**: Terminate inference stream cleanly.
 
 ---
 
 ## Hardware Compatibility
 
-- **Daylight Perception**: Standard 1080p USB UVC webcams (e.g., Kreo Owl Lite FHD).
-- **Night-Time Perception**: USB cameras equipped with automatic motorized IR-Cut filters and onboard 850nm infrared LED illuminators (e.g., Arducam 1080P Day/Night USB Camera, SKU: `R114160` / `B0506`).
-- **Station Infrastructure**: RTSP IP CCTV security cameras with EXIR 850nm arrays.
+- **Daylight Optical Streams**: Standard 1080p USB UVC webcams (e.g., Kreo Owl Lite FHD).
+- **Night-Time Active IR Streams**: USB cameras equipped with motorized IR-Cut filters and onboard 850nm infrared LED illuminators (e.g., Arducam 1080P Day/Night USB Camera).
+- **Station CCTV Infrastructure**: RTSP IP CCTV security cameras with EXIR 850nm illuminators.

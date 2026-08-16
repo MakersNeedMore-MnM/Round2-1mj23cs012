@@ -7,7 +7,7 @@ Supported Environments:
   - Linux / Ubuntu (NVIDIA CUDA or Multi-core CPU)
 
 Features:
-  - Robust Checkpoint Resumption with automated last.pt path discovery.
+  - Robust Checkpoint Resumption with automated last.pt path discovery & path sanitization.
   - Automatic hardware detection and memory tuning across all platforms.
   - Multi-task YOLO11-seg instance segmentation and 11-class hazard detection.
   - Suppresses all non-critical Python / PyTorch / OpenCV runtime warnings.
@@ -55,11 +55,12 @@ class EpochStatusMonitor:
     TARGET_SEG_MAP = 90.0      # Required for pinpoint track geometry locking
     TARGET_OVERALL_MAP = 85.0  # Overall deployment threshold
 
-    def __init__(self):
+    def __init__(self, output_model_path: str = None):
         self.best_map = 0.0
         self.best_epoch = 0
         self.prev_loss = None
         self.prev_map = None
+        self.output_model_path = output_model_path
 
     def on_fit_epoch_end(self, trainer):
         epoch = trainer.epoch + 1
@@ -85,6 +86,13 @@ class EpochStatusMonitor:
             self.best_map = overall_map50
             self.best_epoch = epoch
             is_new_best = True
+            # Auto-save best model intermediate backup
+            if self.output_model_path and hasattr(trainer, "best") and os.path.exists(str(trainer.best)):
+                try:
+                    os.makedirs(os.path.dirname(self.output_model_path), exist_ok=True)
+                    shutil.copy(str(trainer.best), self.output_model_path)
+                except Exception:
+                    pass
 
         # Real-World Accuracy Readiness Categorization
         if overall_map50 >= 90.0:
@@ -180,19 +188,40 @@ def check_system_hardware() -> tuple:
     return device, workers
 
 
+def sanitize_checkpoint(checkpoint_path: str, project_root: str):
+    """Ensures checkpoint internal metadata points cleanly to project_root/runs/segment/raildrishti_local."""
+    try:
+        clean_save_dir = os.path.abspath(os.path.join(project_root, "runs/segment/raildrishti_local"))
+        clean_project = os.path.abspath(os.path.join(project_root, "runs"))
+        data_file = os.path.abspath(os.path.join(project_root, "configs/raildrishti_dataset.yaml"))
+
+        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        if "train_args" in ckpt and isinstance(ckpt["train_args"], dict):
+            ckpt["train_args"]["save_dir"] = clean_save_dir
+            ckpt["train_args"]["project"] = clean_project
+            ckpt["train_args"]["name"] = "segment/raildrishti_local"
+            ckpt["train_args"]["data"] = data_file
+            torch.save(ckpt, checkpoint_path)
+    except Exception as e:
+        pass
+
+
 def find_checkpoint(project_root: str, explicit_path: str = None) -> str:
-    """Finds the most relevant last.pt checkpoint to resume training."""
+    """Finds the most relevant last.pt checkpoint to resume training and cleans its internal paths."""
     if explicit_path and os.path.exists(explicit_path):
-        return os.path.abspath(explicit_path)
+        chk = os.path.abspath(explicit_path)
+        sanitize_checkpoint(chk, project_root)
+        return chk
 
     candidates = [
         os.path.join(project_root, "runs/segment/raildrishti_local/weights/last.pt"),
         os.path.join(project_root, "runs/segment/raildrishti_mac/weights/last.pt"),
-        os.path.join(project_root, "runs/segment/runs/segment/raildrishti_local/weights/last.pt"),
     ]
     for c in candidates:
         if os.path.exists(c):
-            return os.path.abspath(c)
+            chk = os.path.abspath(c)
+            sanitize_checkpoint(chk, project_root)
+            return chk
 
     # Search all subdirectories in runs/
     all_lasts = glob.glob(os.path.join(project_root, "runs/**/weights/last.pt"), recursive=True)
@@ -201,7 +230,9 @@ def find_checkpoint(project_root: str, explicit_path: str = None) -> str:
 
     if all_lasts:
         all_lasts.sort(key=os.path.getmtime, reverse=True)
-        return os.path.abspath(all_lasts[0])
+        chk = os.path.abspath(all_lasts[0])
+        sanitize_checkpoint(chk, project_root)
+        return chk
 
     return None
 
@@ -212,7 +243,7 @@ def train_raildrishti(args):
     data_yaml = os.path.abspath(os.path.join(project_root, args.data))
     weights_path = os.path.abspath(os.path.join(project_root, args.weights)) if not os.path.isabs(args.weights) else args.weights
     output_model_path = os.path.abspath(os.path.join(project_root, "models/RailDrishti.pt"))
-    project_dir = os.path.abspath(os.path.join(project_root, "runs/segment"))
+    save_run_dir = os.path.abspath(os.path.join(project_root, "runs/segment/raildrishti_local"))
 
     if not os.path.exists(data_yaml):
         print(f"[ERROR] Dataset configuration file not found at: {data_yaml}")
@@ -235,13 +266,14 @@ def train_raildrishti(args):
         print(" RESUMING LOCAL RAILDISHTI TRAINING")
         print("=" * 65)
         print(f" • Checkpoint File : {last_weights}")
+        print(f" • Output Directory: {save_run_dir}")
         print(f" • Compute Device  : {device}")
         print("=" * 65 + "\n")
 
         model = YOLO(last_weights)
 
         # Attach Custom Real-World Epoch Monitor Callback
-        monitor = EpochStatusMonitor()
+        monitor = EpochStatusMonitor(output_model_path=output_model_path)
         model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
 
         # In Ultralytics, resume=True cleanly restores all parameters from checkpoint
@@ -256,6 +288,7 @@ def train_raildrishti(args):
         print(f" • Epochs          : {args.epochs}")
         print(f" • Batch Size      : {args.batch}")
         print(f" • Input Image Size: {args.imgsz}x{args.imgsz}")
+        print(f" • Output Directory: {save_run_dir}")
         print(f" • Device          : {device}")
         print(f" • CPU Workers     : {workers}")
         print(f" • Optimizer       : {args.optimizer}")
@@ -265,7 +298,7 @@ def train_raildrishti(args):
         model = YOLO(weights_path)
 
         # Attach Custom Real-World Epoch Monitor Callback
-        monitor = EpochStatusMonitor()
+        monitor = EpochStatusMonitor(output_model_path=output_model_path)
         model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
 
         results = model.train(
@@ -282,8 +315,8 @@ def train_raildrishti(args):
             weight_decay=0.0005,
             warmup_epochs=3.0,
             patience=15,
-            project=project_dir,
-            name="raildrishti_local",
+            project=os.path.abspath(os.path.join(project_root, "runs")),
+            name="segment/raildrishti_local",
             exist_ok=True,
             save=True,
             save_period=5,
@@ -292,10 +325,10 @@ def train_raildrishti(args):
         )
 
     print("\n" + "=" * 65)
-    print(" TRAINING COMPLETE: EXPORTING WEIGHTS")
+    print(" TRAINING COMPLETE: EXPORTING WEIGHTS TO MODELS FOLDER")
     print("=" * 65)
 
-    best_pt = os.path.join(project_dir, "raildrishti_local/weights/best.pt")
+    best_pt = os.path.join(save_run_dir, "weights/best.pt")
     if not os.path.exists(best_pt):
         # Fallback search
         found_bests = glob.glob(os.path.join(project_root, "runs/**/weights/best.pt"), recursive=True)
@@ -306,7 +339,7 @@ def train_raildrishti(args):
     if os.path.exists(best_pt):
         os.makedirs(os.path.dirname(output_model_path), exist_ok=True)
         shutil.copy(best_pt, output_model_path)
-        print(f"[+] Best trained weights successfully saved to: {output_model_path}")
+        print(f"[+] Final best model weights successfully exported to: {output_model_path}")
     else:
         print(f"[!] Warning: {best_pt} not found. Check runs/ directory.")
 
@@ -330,7 +363,8 @@ def train_raildrishti(args):
         print(f" • Metrics Summary: {val_metrics}")
 
     print("=" * 65)
-    print(f"\n[+] You can now run live inference using:")
+    print(f"\n[+] Production Model Ready: {output_model_path}")
+    print(f"    You can now run live inference using:")
     print(f"    python run_inference.py --source 0 --model models/RailDrishti.pt")
 
 
