@@ -1,4 +1,4 @@
-path: /Users/alvinsonny/Desktop/drishti-kavach/dataset_rail-drishti
+path: dataset_rail-drishti
 train: images/train
 val: images/val
 names:

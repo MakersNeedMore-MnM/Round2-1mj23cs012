@@ -1,32 +1,38 @@
 """
-Drishti Kavach: Local Mac / Apple Silicon Training Pipeline for RailDrishti11-Seg
+Drishti Kavach: Universal Cross-Platform Local Training Pipeline for RailDrishti11-Seg
+
+Supported Environments:
+  - macOS (Apple Silicon M1/M2/M3/M4 via Metal Performance Shaders - MPS)
+  - Windows 10/11 (Intel / AMD CPUs or NVIDIA GeForce / RTX GPUs)
+  - Linux / Ubuntu (NVIDIA CUDA or Multi-core CPU)
 
 Features:
-  - Apple Silicon GPU (Metal Performance Shaders - MPS) hardware acceleration.
+  - Automatic hardware detection and memory tuning across all platforms.
   - Multi-task YOLO11-seg instance segmentation and 11-class hazard detection.
   - Suppresses all non-critical Python / PyTorch / OpenCV runtime warnings.
   - Custom Epoch Health Monitor: Real-time assessment after every epoch (BEST, LEARNING, CONVERGING).
   - Auto-export and deployment of trained weights to models/RailDrishti.pt upon completion.
 
 Usage:
-  # 1. Standard Training (Recommended on Mac - 640px for fast training):
-  python src/local_training/train_local_mac.py --epochs 40 --batch 8 --imgsz 640
+  # 1. Standard Training (Recommended - 640px for fast training on laptops):
+  python src/local_training/train_local.py --epochs 40 --batch 8 --imgsz 640
 
   # 2. High-Precision Training (1024px full resolution):
-  python src/local_training/train_local_mac.py --epochs 40 --batch 4 --imgsz 1024
+  python src/local_training/train_local.py --epochs 40 --batch 4 --imgsz 1024
 
   # 3. Resume interrupted training:
-  python src/local_training/train_local_mac.py --resume
+  python src/local_training/train_local.py --resume
 """
 
 import os
 import sys
 import shutil
 import argparse
+import platform
 import warnings
 import logging
 
-# 1. Suppress all non-critical warnings
+# 1. Suppress all non-critical warnings across OS
 warnings.filterwarnings("ignore")
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -104,30 +110,47 @@ class EpochStatusMonitor:
         self.prev_map = overall_map50
 
 
-def check_system_hardware() -> str:
-    """Detects best hardware accelerator on macOS (MPS, CUDA, or CPU)."""
+def check_system_hardware() -> tuple:
+    """Detects best hardware accelerator and optimal worker thread count across Windows, Mac, and Linux."""
+    os_name = platform.system()
+    proc_name = platform.processor() or platform.machine()
+    
     print("\n" + "=" * 65)
     print(" DRISHTI KAVACH: HARDWARE ACCELERATION CHECK")
     print("=" * 65)
+    print(f" • Operating System: {os_name} ({platform.release()})")
+    print(f" • CPU Architecture: {proc_name}")
     print(f" • PyTorch Version : {torch.__version__}")
 
-    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-        device = "mps"
-        print(" • Compute Engine  : Apple Silicon GPU via Metal Performance Shaders (MPS)")
-        print(" • Acceleration    : ACTIVE (Hardware Accelerated)")
-    elif torch.cuda.is_available():
+    # 1. Check NVIDIA GPU (Windows / Linux)
+    if torch.cuda.is_available():
         device = "0"
-        print(f" • Compute Engine  : NVIDIA CUDA GPU ({torch.cuda.get_device_name(0)})")
+        gpu_name = torch.cuda.get_device_name(0)
+        workers = 2 if os_name == "Windows" else 4
+        print(f" • Compute Engine  : NVIDIA CUDA GPU ({gpu_name})")
+        print(" • Acceleration    : ACTIVE (NVIDIA CUDA Hardware Acceleration)")
+
+    # 2. Check Apple Silicon MPS (macOS)
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        device = "mps"
+        workers = 4
+        print(" • Compute Engine  : Apple Silicon GPU (Metal Performance Shaders - MPS)")
+        print(" • Acceleration    : ACTIVE (Apple Silicon Metal Acceleration)")
+
+    # 3. Fallback to Multi-core CPU (Intel / AMD / Generic)
     else:
         device = "cpu"
-        print(" • Compute Engine  : CPU (Multi-core Fallback)")
+        workers = 0 if os_name == "Windows" else 2
+        cpu_count = os.cpu_count() or 4
+        print(f" • Compute Engine  : Multi-core CPU ({cpu_count} Logical Cores)")
+        print(" • Acceleration    : CPU Vectorized Multi-Threading")
     
     print("=" * 65 + "\n")
-    return device
+    return device, workers
 
 
 def train_raildrishti(args):
-    # Determine project root and paths
+    # Determine project root and paths cross-platform
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     data_yaml = os.path.join(project_root, args.data)
     weights_path = os.path.join(project_root, args.weights) if not os.path.isabs(args.weights) else args.weights
@@ -137,7 +160,9 @@ def train_raildrishti(args):
         print(f"[ERROR] Dataset configuration file not found at: {data_yaml}")
         sys.exit(1)
 
-    device = args.device if args.device is not None else check_system_hardware()
+    detected_device, default_workers = check_system_hardware()
+    device = args.device if args.device is not None else detected_device
+    workers = args.workers if args.workers is not None else default_workers
 
     print("=" * 65)
     print(" STARTING LOCAL RAILDISHTI11-SEG TRAINING")
@@ -148,14 +173,16 @@ def train_raildrishti(args):
     print(f" • Batch Size      : {args.batch}")
     print(f" • Input Image Size: {args.imgsz}x{args.imgsz}")
     print(f" • Device          : {device}")
-    print(f" • CPU Workers     : {args.workers}")
+    print(f" • CPU Workers     : {workers}")
     print(f" • Optimizer       : {args.optimizer}")
     print(f" • Learning Rate   : lr0={args.lr0}, lrf={args.lrf}")
     print("=" * 65 + "\n")
 
     # Load base model
     if args.resume:
-        last_weights = os.path.join(project_root, "runs/segment/raildrishti_mac/weights/last.pt")
+        last_weights = os.path.join(project_root, "runs/segment/raildrishti_local/weights/last.pt")
+        if not os.path.exists(last_weights):
+            last_weights = os.path.join(project_root, "runs/segment/raildrishti_mac/weights/last.pt")
         if not os.path.exists(last_weights):
             print(f"[ERROR] Cannot resume: checkpoint not found at {last_weights}")
             sys.exit(1)
@@ -177,7 +204,7 @@ def train_raildrishti(args):
         imgsz=args.imgsz,
         batch=args.batch,
         device=device,
-        workers=args.workers,
+        workers=workers,
         optimizer=args.optimizer,
         lr0=args.lr0,
         lrf=args.lrf,
@@ -186,7 +213,7 @@ def train_raildrishti(args):
         warmup_epochs=3.0,
         patience=15,
         project="runs/segment",
-        name="raildrishti_mac",
+        name="raildrishti_local",
         exist_ok=True,
         save=True,
         save_period=5,
@@ -199,13 +226,13 @@ def train_raildrishti(args):
     print(" TRAINING COMPLETE: EXPORTING WEIGHTS")
     print("=" * 65)
 
-    best_pt = os.path.join(project_root, "runs/segment/raildrishti_mac/weights/best.pt")
+    best_pt = os.path.join(project_root, "runs/segment/raildrishti_local/weights/best.pt")
     if os.path.exists(best_pt):
         os.makedirs(os.path.dirname(output_model_path), exist_ok=True)
         shutil.copy(best_pt, output_model_path)
         print(f"[+] Best trained weights successfully saved to: {output_model_path}")
     else:
-        print(f"[!] Warning: {best_pt} not found. Check runs/segment/raildrishti_mac/weights/")
+        print(f"[!] Warning: {best_pt} not found. Check runs/segment/raildrishti_local/weights/")
 
     # Run quick validation on validation split
     print("\nEvaluating trained model on validation set...")
@@ -232,14 +259,14 @@ def train_raildrishti(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Drishti Kavach Local Mac Training")
+    parser = argparse.ArgumentParser(description="Drishti Kavach Universal Local Training")
     parser.add_argument("--data", type=str, default="configs/raildrishti_dataset.yaml", help="Path to dataset YAML")
     parser.add_argument("--weights", type=str, default="yolo11s-seg.pt", help="Pretrained base weights")
     parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs (default: 40)")
-    parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8 for Mac)")
-    parser.add_argument("--imgsz", type=int, default=640, help="Image size (640 for fast Mac training, 1024 for high-res)")
-    parser.add_argument("--device", type=str, default=None, help="Device to use ('mps', 'cpu', '0'). Default: auto-detect")
-    parser.add_argument("--workers", type=int, default=4, help="Data loader CPU worker processes")
+    parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
+    parser.add_argument("--imgsz", type=int, default=640, help="Image size (640 for fast laptop training, 1024 for high-res)")
+    parser.add_argument("--device", type=str, default=None, help="Device ('mps', '0', 'cpu'). Default: auto-detect")
+    parser.add_argument("--workers", type=int, default=None, help="Data loader worker processes (auto-tuned)")
     parser.add_argument("--optimizer", type=str, default="AdamW", help="Optimizer: AdamW, SGD, Adam")
     parser.add_argument("--lr0", type=float, default=0.001, help="Initial learning rate")
     parser.add_argument("--lrf", type=float, default=0.01, help="Final learning rate factor")
