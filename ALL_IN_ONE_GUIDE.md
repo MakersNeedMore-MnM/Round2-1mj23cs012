@@ -8,7 +8,7 @@
 
 ## Research Paper Details
 
-- **Paper Title**: _Drishti Kavach – Advancing India’s Indigenous Railway Safety and Security System using RailDrishti11-Seg_
+- **Paper Title**: _Drishti Kavach – Advancing India’s Indigenous Railway Safety and Security System using RailDrishti_
 - **Institution**: MVJ College of Engineering, Bangalore
 - **Department**: Department of Computer Science and Engineering
 
@@ -226,7 +226,8 @@ python src/local_training/train_local_mac.py --epochs 40 --batch 4 --imgsz 1024
 # Resume interrupted training:
 python src/local_training/train_local_mac.py --resume
 ```
-*Automatically copies best trained weights to `models/RailDrishti.pt` upon training completion.*
+
+_Automatically copies best trained weights to `models/RailDrishti.pt` upon training completion._
 
 ---
 
