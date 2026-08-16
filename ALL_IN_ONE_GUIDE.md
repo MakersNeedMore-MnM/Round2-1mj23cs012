@@ -205,6 +205,29 @@ Where:
 - **Data Augmentations Applied**: HSV color variance (`hsv_h=0.015, hsv_s=0.5, hsv_v=0.4`), spatial translation (0.08), scaling (0.25), horizontal flip (0.5), and mosaic augmentation (0.7).
 - **Output Weight File**: Exported as **`models/RailDrishti.pt`** (~22 MB).
 
+#### 5. Local Mac / Apple Silicon GPU Training Alternative (`src/local_training/train_local_mac.py`):
+
+For rapid on-device training on macOS using Apple Silicon GPU (Metal Performance Shaders - MPS) acceleration without depending on cloud timeouts:
+
+- **Warnings Disabled**: Automatically suppresses non-critical runtime and framework warnings for clean terminal output.
+- **Live Epoch State Monitor**: Evaluates and prints a real-time health card after every single epoch:
+  - 🌟 `[BEST MODEL SO FAR - PEAK ACCURACY]` (When a new all-time high validation score is reached)
+  - 📈 `[LEARNING & IMPROVING - ACCURACY UP]` (Positive accuracy gain)
+  - 🔄 `[OPTIMIZING WEIGHTS - LOSS DECREASING]` (Steady loss convergence)
+  - 🌱 `[WARMUP & FEATURE INITIALIZATION]` (Early stage warm-up)
+
+```bash
+# Standard fast training (640px resolution, batch 8):
+python src/local_training/train_local_mac.py --epochs 40 --batch 8 --imgsz 640
+
+# High-precision training (1024px full resolution):
+python src/local_training/train_local_mac.py --epochs 40 --batch 4 --imgsz 1024
+
+# Resume interrupted training:
+python src/local_training/train_local_mac.py --resume
+```
+*Automatically copies best trained weights to `models/RailDrishti.pt` upon training completion.*
+
 ---
 
 ### Phase 5: Vector-Geometric Spatial Hazard & Track Clearance Reasoning Engine (`src/spatial_reasoning/hazard_analyzer.py`)
