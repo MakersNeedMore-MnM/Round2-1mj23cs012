@@ -1,277 +1,208 @@
 """
-Drishti Kavach: Active IR CCTV (850nm) Sensor Simulation Engine
+Drishti Kavach: Active Infrared (850nm NIR) CCTV Physics-Based Sensor Simulator
 
-CLI Flags & Usage:
-  --preview     : Generate Daylight vs Active IR (850nm) comparison preview
-  --convert-all : Batch convert all dataset images to Active IR CCTV format
-  --workers INT : Number of parallel CPU worker processes (default: 8)
+Simulates:
+  1. Spectral Reflectance Shift (Greyscale NIR sensor response).
+  2. Conical Infrared Illuminator (Spotlight beam falloff & central hotspot).
+  3. Shot & Read Noise (Dark sensor CMOS noise simulation).
+  4. Metallic Rail Retroreflection Bloom (850nm specular glare along steel track heads).
 
-Example:
+Safety & Integrity Rules:
+  - Original source folders (dataset_railsem19 and dataset_uav-rsod) are strictly UNTOUCHED.
+  - Converts images and annotations directly inside 'dataset_rail-drishti/'.
+
+Usage:
+  # 1. Synthesize night pairs across the unified dataset:
   python src/augmentation/night_cctv_converter.py --convert-all --workers 8
+
+  # 2. Generate side-by-side verification preview comparison:
+  python src/augmentation/night_cctv_converter.py --preview
 """
 
 import os
 import glob
-import math
 import shutil
-import random
 import argparse
-import cv2
 import numpy as np
-from PIL import Image, ImageEnhance, ImageOps
-import xml.etree.ElementTree as ET
+import cv2
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
 
-class NightCCTVConverter:
+def convert_day_to_night_cctv(image: np.ndarray, seed: int = None) -> np.ndarray:
     """
-    Transforms daylight railway imagery into authentic Active Infrared (NIR 850nm)
-    railway CCTV security footage.
+    Transforms a daylight RGB frame into an authentic 850nm Active IR CCTV surveillance feed.
     """
-
-    def __init__(self, seed: int = 42):
-        np.random.seed(seed)
-        random.seed(seed)
-
-    @staticmethod
-    def to_active_ir(
-        img_np: np.ndarray,
-        spotlight_strength: float = 0.85,
-        noise_level: float = 12.0,
-        add_bloom: bool = True
-    ) -> np.ndarray:
-        """
-        Converts an RGB image to Active Infrared (NIR 850nm) CCTV security footage.
-        
-        Features:
-        - Spectral response mapping: vegetation and steel rails reflect NIR brightly.
-        - Center-weighted IR LED ring spotlight falloff (vignetting).
-        - High-gain CMOS sensor noise (Poisson + Gaussian).
-        - Subtle rail bloom / halo.
-        - CCTV monochrome/cool phosphor grading.
-        """
-        h, w = img_np.shape[:2]
-        img_float = img_np.astype(np.float32)
-
-        # 1. NIR Spectral Response (Green & Red reflect NIR strongly)
-        b, g, r = img_float[:, :, 0], img_float[:, :, 1], img_float[:, :, 2]
-        ir_mono = 0.45 * r + 0.45 * g + 0.10 * b
-
-        # 2. Dynamic Range & Contrast adjustment for IR sensor
-        ir_mono = np.power(ir_mono / 255.0, 1.15) * 255.0
-
-        # 3. IR LED Illuminator Spotlight Falloff (Vignetting)
-        cx, cy = w / 2.0, h * 0.55
-        y_grid, x_grid = np.ogrid[:h, :w]
-        dist_sq = ((x_grid - cx) / (w * 0.55)) ** 2 + ((y_grid - cy) / (h * 0.55)) ** 2
-        vignette = 1.0 - (1.0 - spotlight_strength) * np.clip(dist_sq, 0.0, 1.0)
-        ir_mono = ir_mono * vignette
-
-        # 4. Rail & Specular Highlight Bloom (Glow on bright steel tracks)
-        if add_bloom:
-            bright_mask = np.clip((ir_mono - 170.0) / 85.0, 0.0, 1.0)
-            bloom = cv2.GaussianBlur(ir_mono * bright_mask, (21, 21), 0)
-            ir_mono = np.clip(ir_mono + 0.25 * bloom, 0.0, 255.0)
-
-        # 5. CMOS Sensor Gain Noise (Poisson-Gaussian)
-        noise = np.random.normal(0, noise_level, (h, w))
-        ir_noisy = np.clip(ir_mono + noise, 0.0, 255.0).astype(np.uint8)
-
-        # 6. Apply CCTV monochrome / subtle cool-gray phosphor grading
-        cctv_b = np.clip(ir_noisy * 1.02, 0, 255).astype(np.uint8)
-        cctv_g = ir_noisy
-        cctv_r = np.clip(ir_noisy * 0.98, 0, 255).astype(np.uint8)
-
-        ir_cctv = cv2.merge([cctv_b, cctv_g, cctv_r])
-        return ir_cctv
-
-
-def convert_image_file(in_path: str, out_path: str, seed: int = 42):
-    """Converts a single image file to Active IR CCTV style."""
-    if os.path.exists(out_path):
-        return out_path
-    
-    img = cv2.imread(in_path)
-    if img is None:
+    if image is None:
         return None
-    
-    np.random.seed(seed)
-    random.seed(seed)
-    
-    converted = NightCCTVConverter.to_active_ir(img)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    cv2.imwrite(out_path, converted)
-    return out_path
+    if seed is not None:
+        np.random.seed(seed)
+
+    h, w, c = image.shape
+
+    # 1. Spectral Conversion: Green/Red dominant NIR CMOS response
+    weights = [0.18, 0.47, 0.35]  # B, G, R weights in NIR spectrum
+    mono = (image[:, :, 0] * weights[0] +
+            image[:, :, 1] * weights[1] +
+            image[:, :, 2] * weights[2]).astype(np.float32)
+
+    # 2. Conical Infrared Illuminator Spotlight Vignetting
+    center_x, center_y = w / 2.0, h * 0.60
+    Y, X = np.ogrid[:h, :w]
+    dist_sq = ((X - center_x) ** 2) / ((w * 0.58) ** 2) + ((Y - center_y) ** 2) / ((h * 0.48) ** 2)
+
+    spotlight = np.exp(-1.4 * dist_sq).astype(np.float32)
+    ambient_ir = 0.12  # Ambient nocturnal diffuse illumination
+    ir_illuminator = ambient_ir + (1.0 - ambient_ir) * spotlight
+
+    night_base = mono * ir_illuminator
+
+    # 3. Dynamic Range Tone-Mapping (S-Curve contrast)
+    night_norm = night_base / 255.0
+    night_tonemapped = np.power(night_norm, 1.25)
+    night_base = night_tonemapped * 255.0
+
+    # 4. Metallic Rail Line Specular Bloom & Retroreflection
+    bright_mask = (night_base > 165).astype(np.float32)
+    bloom_blur = cv2.GaussianBlur(bright_mask, (15, 15), 0)
+    night_base = night_base + (bloom_blur * 22.0)
+
+    # 5. CMOS Sensor Read & Dark Current Noise (Poisson-Gaussian Noise Model)
+    sigma_noise = 6.5
+    noise = np.random.normal(0, sigma_noise, (h, w)).astype(np.float32)
+    night_noisy = night_base + noise
+
+    # Clip to valid 8-bit dynamic range
+    night_final_mono = np.clip(night_noisy, 0, 255).astype(np.uint8)
+
+    # 6. Monochromatic 3-Channel CCTV Feed Encoding
+    night_bgr = cv2.merge([night_final_mono, night_final_mono, night_final_mono])
+    return night_bgr
 
 
-def generate_sample_previews(sample_img_path: str = None, output_dir: str = "outputs"):
-    """Generates visual comparison grids (Daylight vs Active IR CCTV) in the original banner style."""
-    previews_dir = os.path.join(output_dir, "day_vs_night_previews")
-    os.makedirs(previews_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
-
-    def make_strip(img_bgr):
-        ir_bgr = NightCCTVConverter.to_active_ir(img_bgr)
-
-        def add_banner(im, title, color_rgb=(255, 255, 255)):
-            h, w = im.shape[:2]
-            canvas = im.copy()
-            cv2.rectangle(canvas, (0, 0), (w, 55), (15, 15, 15), -1)
-            cv2.putText(canvas, title, (20, 38), cv2.FONT_HERSHEY_DUPLEX, 0.9, color_rgb, 2, cv2.LINE_AA)
-            return canvas
-
-        card_day = add_banner(img_bgr, "ORIGINAL DAYLIGHT (1080p RGB)", (255, 200, 50))
-        card_ir = add_banner(ir_bgr, "DRISHTI KAVACH: ACTIVE IR CCTV (850nm NIGHT VISION)", (80, 255, 140))
-
-        scale = 0.5
-        w_s, h_s = int(img_bgr.shape[1] * scale), int(img_bgr.shape[0] * scale)
-        grid_day = cv2.resize(card_day, (w_s, h_s))
-        grid_ir = cv2.resize(card_ir, (w_s, h_s))
-
-        return np.hstack([grid_day, grid_ir])
-
-    # 1. Generate primary single preview
-    primary_path = sample_img_path or "dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/63.jpg"
-    if os.path.exists(primary_path):
-        img_primary = cv2.imread(primary_path)
-        if img_primary is not None:
-            strip = make_strip(img_primary)
-            main_out = os.path.join(output_dir, "day_vs_night_preview.jpg")
-            cv2.imwrite(main_out, strip)
-            print(f"[+] Generated main comparison preview: {main_out}")
-
-    # 2. Generate diverse set of sample comparison cards
-    v1_images = sorted(glob.glob("dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/*.jpg"))
-    v2_images = sorted(glob.glob("dataset_uav-rsod/V2 UAV-RSOD_Dataset for Obstacle Detection/images/train/*.jpg"))
-
-    samples = [
-        ("sample_1_track_geometry.jpg", v1_images[10] if len(v1_images) > 10 else primary_path),
-        ("sample_2_rail_switch.jpg", v1_images[50] if len(v1_images) > 50 else primary_path),
-        ("sample_3_obstacle_debris.jpg", v2_images[15] if len(v2_images) > 15 else primary_path),
-        ("sample_4_trackside_pedestrian.jpg", v2_images[80] if len(v2_images) > 80 else primary_path),
-        ("sample_5_livestock_near_track.jpg", v2_images[150] if len(v2_images) > 150 else primary_path),
-        ("sample_6_crossing_vehicle.jpg", v2_images[200] if len(v2_images) > 200 else primary_path),
-    ]
-
-    for fname, img_p in samples:
-        if not os.path.exists(img_p):
-            continue
-        img = cv2.imread(img_p)
-        if img is None:
-            continue
-        strip = make_strip(img)
-        out_p = os.path.join(previews_dir, fname)
-        cv2.imwrite(out_p, strip)
-        print(f"[+] Saved comparison preview: {out_p}")
-
-    print(f"\n[+] All {len(samples)} previews generated in: {previews_dir}/")
-    return previews_dir
+def convert_image_file(in_path: str, out_path: str, seed: int):
+    img = cv2.imread(in_path)
+    if img is not None:
+        night_img = convert_day_to_night_cctv(img, seed=seed)
+        cv2.imwrite(out_path, night_img, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
 
 
-def batch_convert_dataset(dataset_root: str = "dataset_uav-rsod", num_workers: int = 8):
+def convert_unified_dataset(project_root: str, num_workers: int = 8):
     """
-    Scans dataset_uav-rsod and converts all images into Active IR CCTV counterparts.
-    Also propagates ground-truth annotations 1:1.
+    Converts images strictly inside dataset_rail-drishti/ into paired 850nm Active IR CCTV.
+    Original source datasets are strictly left untouched.
     """
+    unified_root = os.path.join(project_root, "dataset_rail-drishti")
+    
+    if not os.path.exists(unified_root):
+        print(f"[ERROR] Unified dataset directory not found at: {unified_root}")
+        print("        Please run Step 1 first: python src/preprocessing/unified_dataset_builder.py")
+        return
+        
     print("=" * 70)
-    print(" DRISHTI KAVACH: BATCH ACTIVE IR CCTV (850nm) DATASET SYNTHESIS")
+    print(" SYNTHESIZING ACTIVE IR 850nm CCTV INSIDE dataset_rail-drishti/")
     print("=" * 70)
     
-    train_images = glob.glob(os.path.join(dataset_root, "V2 UAV-RSOD_Dataset for Obstacle Detection/images/train/*.jpg"))
-    test_images = glob.glob(os.path.join(dataset_root, "V2 UAV-RSOD_Dataset for Obstacle Detection/images/test/*.jpg"))
-    seg_images = glob.glob(os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation/1 Images/*.jpg"))
-
-    print(f"Found {len(train_images)} train images, {len(test_images)} test images, {len(seg_images)} seg images.")
-
+    train_img_dir = os.path.join(unified_root, "images/train")
+    val_img_dir = os.path.join(unified_root, "images/val")
+    train_lbl_dir = os.path.join(unified_root, "labels/train")
+    val_lbl_dir = os.path.join(unified_root, "labels/val")
+    
+    train_images = glob.glob(os.path.join(train_img_dir, "*.jpg")) + glob.glob(os.path.join(train_img_dir, "*.png"))
+    val_images = glob.glob(os.path.join(val_img_dir, "*.jpg")) + glob.glob(os.path.join(val_img_dir, "*.png"))
+    
     tasks = []
     
-    # Tasks for V2 Train
+    # 1. Queue Train Images & Annotations
     for img_path in train_images:
         fname = os.path.basename(img_path)
         base, ext = os.path.splitext(fname)
         if base.startswith("night_"):
             continue
-        out_path = os.path.join(os.path.dirname(img_path), f"night_{base}{ext}")
+        out_path = os.path.join(train_img_dir, f"night_{base}{ext}")
         tasks.append((img_path, out_path, hash(fname) % 100000))
         
-        xml_in = os.path.join(os.path.dirname(img_path), f"{base}.xml")
-        xml_out = os.path.join(os.path.dirname(img_path), f"night_{base}.xml")
-        if os.path.exists(xml_in):
-            try:
-                tree = ET.parse(xml_in)
-                root = tree.getroot()
-                fn_elem = root.find("filename")
-                if fn_elem is not None:
-                    fn_elem.text = f"night_{base}{ext}"
-                tree.write(xml_out)
-            except Exception as e:
-                shutil.copy(xml_in, xml_out)
+        lbl_in = os.path.join(train_lbl_dir, f"{base}.txt")
+        lbl_out = os.path.join(train_lbl_dir, f"night_{base}.txt")
+        if os.path.exists(lbl_in):
+            shutil.copyfile(lbl_in, lbl_out)
 
-    # Tasks for V2 Test
-    for img_path in test_images:
+    # 2. Queue Val Images & Annotations
+    for img_path in val_images:
         fname = os.path.basename(img_path)
         base, ext = os.path.splitext(fname)
         if base.startswith("night_"):
             continue
-        out_path = os.path.join(os.path.dirname(img_path), f"night_{base}{ext}")
+        out_path = os.path.join(val_img_dir, f"night_{base}{ext}")
         tasks.append((img_path, out_path, hash(fname) % 100000))
         
-        xml_in = os.path.join(os.path.dirname(img_path), f"{base}.xml")
-        xml_out = os.path.join(os.path.dirname(img_path), f"night_{base}.xml")
-        if os.path.exists(xml_in):
-            try:
-                tree = ET.parse(xml_in)
-                root = tree.getroot()
-                fn_elem = root.find("filename")
-                if fn_elem is not None:
-                    fn_elem.text = f"night_{base}{ext}"
-                tree.write(xml_out)
-            except Exception as e:
-                shutil.copy(xml_in, xml_out)
+        lbl_in = os.path.join(val_lbl_dir, f"{base}.txt")
+        lbl_out = os.path.join(val_lbl_dir, f"night_{base}.txt")
+        if os.path.exists(lbl_in):
+            shutil.copyfile(lbl_in, lbl_out)
 
-    # Tasks for V1 Segmentation
-    for img_path in seg_images:
-        fname = os.path.basename(img_path)
-        base, ext = os.path.splitext(fname)
-        if base.startswith("night_"):
-            continue
-        out_path = os.path.join(os.path.dirname(img_path), f"night_{base}{ext}")
-        tasks.append((img_path, out_path, hash(fname) % 100000))
-        
-        for sub_mask in [
-            "2 Annotations/2.2 Masking/Rail Inside",
-            "2 Annotations/2.2 Masking/Rail Lines",
-            "2 Annotations/2.1 Labelling/Rail Inside",
-            "2 Annotations/2.1 Labelling/Rail Lines"
-        ]:
-            mask_src = os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation", sub_mask, fname)
-            mask_dst = os.path.join(dataset_root, "V1 UAV-RSOD_Dataset for Segmentation", sub_mask, f"night_{base}{ext}")
-            if os.path.exists(mask_src):
-                shutil.copy(mask_src, mask_dst)
-
-    print(f"Total image conversion tasks queued: {len(tasks)}")
+    print(f" • Daylight Images in dataset_rail-drishti : {len(tasks)}")
+    print(f" • Synthesizing {len(tasks)} matched 850nm nocturnal pairs...")
     
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [executor.submit(convert_image_file, t[0], t[1], t[2]) for t in tasks]
-        for _ in tqdm(as_completed(futures), total=len(futures), desc="Synthesizing Active IR CCTV"):
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Active IR Synthesis"):
             pass
+            
+    total_final = len(tasks) * 2
+    print("\n" + "=" * 70)
+    print(" ACTIVE IR CCTV SYNTHESIS COMPLETE")
+    print("=" * 70)
+    print(f" • Total Final Dataset Size: {total_final} Images & Annotations")
+    print(f" • Stored Exclusively in   : {unified_root}")
+    print("=" * 70 + "\n")
 
-    print("\n[+] Active IR CCTV Dataset Generation Complete!")
+
+def generate_previews(project_root: str):
+    """Generates before/after preview comparison images strictly in outputs/day_vs_night_previews."""
+    out_dir = os.path.join(project_root, "outputs/day_vs_night_previews")
+    os.makedirs(out_dir, exist_ok=True)
+    
+    # Priority: Grab samples directly from dataset_rail-drishti
+    unified_train = os.path.join(project_root, "dataset_rail-drishti/images/train")
+    sample_images = []
+    if os.path.exists(unified_train):
+        sample_images = [f for f in glob.glob(os.path.join(unified_train, "*.jpg")) if not os.path.basename(f).startswith("night_")][:3]
+        
+    if not sample_images:
+        sample_images = glob.glob(os.path.join(project_root, "dataset_railsem19/versions/1/jpgs/rs19_val/*.jpg"))[:3]
+        
+    for idx, img_path in enumerate(sample_images):
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+        night = convert_day_to_night_cctv(img, seed=idx * 42)
+        h, w = img.shape[:2]
+        
+        # Add labels
+        day_annotated = img.copy()
+        cv2.putText(day_annotated, "DAYLIGHT RGB SENSOR", (40, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+        night_annotated = night.copy()
+        cv2.putText(night_annotated, "850nm ACTIVE IR CCTV SENSOR", (40, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+        
+        comparison = np.hstack([day_annotated, night_annotated])
+        out_file = os.path.join(out_dir, f"preview_comparison_{idx + 1}.jpg")
+        cv2.imwrite(out_file, comparison)
+        print(f"[+] Saved comparison preview to: {out_file}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Drishti Kavach Active IR CCTV Converter")
-    parser.add_argument("--preview", action="store_true", help="Generate Daylight vs Active IR comparison preview")
-    parser.add_argument("--convert-all", action="store_true", help="Convert all dataset images to Active IR CCTV")
+    parser = argparse.ArgumentParser(description="Active IR 850nm CCTV Simulator")
+    parser.add_argument("--convert-all", action="store_true", help="Convert all images inside dataset_rail-drishti")
+    parser.add_argument("--preview", action="store_true", help="Generate side-by-side preview comparisons")
     parser.add_argument("--workers", type=int, default=8, help="Number of CPU worker processes")
+
     args = parser.parse_args()
+    proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
     if args.preview:
-        sample_path = "dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/63.jpg"
-        generate_sample_previews(sample_path)
+        generate_previews(proj_root)
     elif args.convert_all:
-        batch_convert_dataset(num_workers=args.workers)
+        convert_unified_dataset(proj_root, num_workers=args.workers)
     else:
-        sample_path = "dataset_uav-rsod/V1 UAV-RSOD_Dataset for Segmentation/1 Images/63.jpg"
-        generate_sample_previews(sample_path)
+        generate_previews(proj_root)

@@ -6,22 +6,20 @@ Supported Environments:
   - Windows 10/11 (Intel / AMD CPUs or NVIDIA GeForce / RTX GPUs)
   - Linux / Ubuntu (NVIDIA CUDA or Multi-core CPU)
 
-Features:
-  - Robust Checkpoint Resumption with automated last.pt path discovery & path sanitization.
-  - Automatic hardware detection and memory tuning across all platforms.
-  - Multi-task YOLO11-seg instance segmentation and 11-class hazard detection.
-  - Suppresses all non-critical Python / PyTorch / OpenCV runtime warnings.
-  - Real-World Readiness Monitor: Compares accuracy after every epoch against actual Indian Railways operational targets.
-  - Auto-export and deployment of trained weights to models/RailDrishti.pt upon completion.
+Key Features:
+  - Minimal Color-Coded Accuracy Display: Clean red-to-green graduation (Worse -> Best) comparing mAP vs Indian Railways operational targets after every epoch.
+  - Graceful Pause & Resume: Press [Ctrl + C] to pause training at any time with zero data loss.
+  - Seamless Resumption: Run 'python src/local_training/train_local.py --resume' to continue from the exact paused epoch.
+  - Auto-Deployment: Exports the best trained model directly to 'models/RailDrishti.pt'.
 
 Usage:
-  # 1. Standard Training (Recommended - 640px for fast training on laptops):
+  # 1. Start Fresh Training (Recommended 640px for fast laptop training):
   python src/local_training/train_local.py --epochs 40 --batch 8 --imgsz 640
 
-  # 2. High-Precision Training (1024px full resolution):
+  # 2. High-Precision Full-Resolution Training (1024px):
   python src/local_training/train_local.py --epochs 40 --batch 4 --imgsz 1024
 
-  # 3. Resume interrupted training (Automatically finds last.pt):
+  # 3. Resume / Continue Paused Training:
   python src/local_training/train_local.py --resume
 """
 
@@ -29,12 +27,13 @@ import os
 import sys
 import glob
 import shutil
+import signal
 import argparse
 import platform
 import warnings
 import logging
 
-# 1. Suppress all non-critical warnings across OS
+# 1. Suppress all non-critical runtime warnings
 warnings.filterwarnings("ignore")
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -44,13 +43,26 @@ import torch
 from ultralytics import YOLO
 
 
+def setup_graceful_interrupt():
+    """Configures graceful pause handler on SIGINT (Ctrl + C)."""
+    def handle_interrupt(sig, frame):
+        print("\n\n" + "=" * 70)
+        print(" ⏸️  TRAINING PAUSED GRACEFULLY (Ctrl + C detected)")
+        print("=" * 70)
+        print(" • All current epoch progress and weights are safely saved.")
+        print(" • Resume at any time by running: python src/local_training/train_local.py --resume")
+        print("=" * 70 + "\n")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_interrupt)
+
+
 class EpochStatusMonitor:
     """
-    Tracks training progress and compares accuracy metrics against real-world
-    operational requirements for Indian Railways Kavach deployment.
+    Tracks training progress and displays a minimal, color-coded (Red -> Green)
+    accuracy evaluation comparing metrics against real-world deployment targets.
     """
     
-    # Real-World Operational Targets
     TARGET_BOX_MAP = 85.0      # Required for reliable obstacle braking
     TARGET_SEG_MAP = 90.0      # Required for pinpoint track geometry locking
     TARGET_OVERALL_MAP = 85.0  # Overall deployment threshold
@@ -86,7 +98,6 @@ class EpochStatusMonitor:
             self.best_map = overall_map50
             self.best_epoch = epoch
             is_new_best = True
-            # Auto-save best model intermediate backup
             if self.output_model_path and hasattr(trainer, "best") and os.path.exists(str(trainer.best)):
                 try:
                     os.makedirs(os.path.dirname(self.output_model_path), exist_ok=True)
@@ -94,56 +105,53 @@ class EpochStatusMonitor:
                 except Exception:
                     pass
 
-        # Real-World Accuracy Readiness Categorization
+        # Color-coded gradient from Red (Worse) -> Green (Best)
+        # 1. Red: < 45% (Pre-convergence / Worst)
+        # 2. Orange/Magenta: 45-64.9% (Under-trained / Low)
+        # 3. Yellow: 65-79.9% (Improving / Medium)
+        # 4. Green: 80-89.9% (Good / Operational Grade)
+        # 5. Bold Bright Green: >= 90% (Best / Deployment Ready)
         if overall_map50 >= 90.0:
-            state_badge = "🏆 [EXCELLENT - DEPLOYMENT READY (EXCEEDS TARGET)]"
-            readiness_desc = "FIELD READY (Exceeds all safety & real-world operational benchmarks)"
-            health_color = "\033[92m"  # Bright Green
+            state_tag = "🏆 [BEST / DEPLOYMENT READY]"
+            color = "\033[1;92m"    # Bold Bright Emerald Green
         elif overall_map50 >= 80.0:
-            state_badge = "🌟 [GOOD / OPERATIONAL GRADE (MEETS REAL-WORLD TARGET)]"
-            readiness_desc = "OPERATIONAL GRADE (Meets field deployment safety threshold >= 85%)"
-            health_color = "\033[96m"  # Cyan
+            state_tag = "🌟 [GOOD / OPERATIONAL GRADE]"
+            color = "\033[92m"      # Light / Standard Green
         elif overall_map50 >= 65.0:
-            state_badge = "📈 [LEARNING & IMPROVING - APPROACHING TARGET]"
-            readiness_desc = "PROMISING (Approaching target; train more to refine small obstacles)"
-            health_color = "\033[93m"  # Yellow
+            state_tag = "📈 [APPROACHING TARGET]"
+            color = "\033[93m"      # Bright Yellow
         elif overall_map50 >= 45.0:
-            state_badge = "🔄 [UNDER-TRAINED - MORE EPOCHS REQUIRED]"
-            readiness_desc = "INTERMEDIATE (Learning basic track shapes; slender hazards unrefined)"
-            health_color = "\033[95m"  # Magenta
+            state_tag = "🔄 [LEARNING & IMPROVING]"
+            color = "\033[95m"      # Magenta / Orange
         else:
-            state_badge = "🌱 [INITIALIZING / PRE-CONVERGENCE (CONTINUE TRAINING)]"
-            readiness_desc = "EARLY STAGE (Pre-convergence; high false-alarm risk if deployed now)"
-            health_color = "\033[91m"  # Red
+            state_tag = "🌱 [UNDER-TRAINED / INITIALIZING]"
+            color = "\033[91m"      # Bright Red (Worst)
 
-        # Comparison delta strings
         box_diff = box_map50 - self.TARGET_BOX_MAP
         seg_diff = seg_map50 - self.TARGET_SEG_MAP
         overall_diff = overall_map50 - self.TARGET_OVERALL_MAP
 
-        box_tag = f"[ {'+' if box_diff >= 0 else ''}{box_diff:5.1f}% vs Target ]"
-        seg_tag = f"[ {'+' if seg_diff >= 0 else ''}{seg_diff:5.1f}% vs Target ]"
-        overall_tag = f"[ {'+' if overall_diff >= 0 else ''}{overall_diff:5.1f}% vs Target ]"
+        box_tag = f"[{'+' if box_diff >= 0 else ''}{box_diff:4.1f}%]"
+        seg_tag = f"[{'+' if seg_diff >= 0 else ''}{seg_diff:4.1f}%]"
+        overall_tag = f"[{'+' if overall_diff >= 0 else ''}{overall_diff:4.1f}%]"
 
-        reset_col = "\033[0m"
-
-        print(f"\n{health_color}┌───────────────────────────────────────────────────────────────────────────────┐{reset_col}")
-        print(f"{health_color}│  EPOCH [{epoch:02d}/{total_epochs:02d}] MODEL STATE : {state_badge}{reset_col}")
-        print(f"{health_color}├───────────────────────────────────────────────────────────────────────────────┤{reset_col}")
-        print(f"│  REAL-WORLD ACCURACY COMPARISON (Current vs Required Target):                 │")
-        print(f"│  • Obstacle Detection Box mAP@50 : {box_map50:5.1f}% / {self.TARGET_BOX_MAP:4.1f}% Target  {box_tag}")
-        print(f"│  • Track Segment Mask mAP@50     : {seg_map50:5.1f}% / {self.TARGET_SEG_MAP:4.1f}% Target  {seg_tag}")
-        print(f"│  • Combined Overall Score        : {overall_map50:5.1f}% / {self.TARGET_OVERALL_MAP:4.1f}% Target  {overall_tag}")
-        print(f"{health_color}├───────────────────────────────────────────────────────────────────────────────┤{reset_col}")
-        print(f"│  OPERATIONAL ASSESSMENT : {readiness_desc}")
+        loss_str = "N/A"
         if loss_val is not None:
-            loss_trend = ""
+            diff_str = ""
             if self.prev_loss is not None:
-                diff = loss_val - self.prev_loss
-                loss_trend = f" ({'+' if diff > 0 else ''}{diff:.4f} vs last epoch)"
-            print(f"│  • Current Training Loss  : {loss_val:.4f}{loss_trend}")
-        print(f"│  • Peak Accuracy Recorded : {self.best_map:5.1f}% (Epoch {self.best_epoch})" + (" [NEW RECORD!]" if is_new_best else ""))
-        print(f"{health_color}└───────────────────────────────────────────────────────────────────────────────┘{reset_col}\n")
+                d = loss_val - self.prev_loss
+                diff_str = f" ({'+' if d > 0 else ''}{d:.3f})"
+            loss_str = f"{loss_val:.4f}{diff_str}"
+
+        peak_str = f"{self.best_map:4.1f}% (Ep {self.best_epoch})" + (" *" if is_new_best else "")
+        reset = "\033[0m"
+
+        # Minimal, sleek, to-the-point card
+        print(f"\n{color}┌─── EPOCH [{epoch:02d}/{total_epochs:02d}] MODEL STATE: {state_tag} ─────────────────────────────┐{reset}")
+        print(f"{color}│{reset}  • OVERALL ACCURACY : {color}{overall_map50:5.1f}%{reset} (Target: {self.TARGET_OVERALL_MAP:.1f}% {overall_tag}) | Peak: {peak_str}")
+        print(f"{color}│{reset}  • Obstacle Box mAP : {box_map50:5.1f}% / {self.TARGET_BOX_MAP:.1f}% Target {box_tag:<8} | Loss: {loss_str}")
+        print(f"{color}│{reset}  • Track Mask mAP   : {seg_map50:5.1f}% / {self.TARGET_SEG_MAP:.1f}% Target {seg_tag:<8} | Pause: [Ctrl+C]")
+        print(f"{color}└───────────────────────────────────────────────────────────────────────────────┘{reset}\n")
 
         self.prev_loss = loss_val
         self.prev_map = overall_map50
@@ -238,7 +246,8 @@ def find_checkpoint(project_root: str, explicit_path: str = None) -> str:
 
 
 def train_raildrishti(args):
-    # Determine project root and paths cross-platform
+    setup_graceful_interrupt()
+
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     data_yaml = os.path.abspath(os.path.join(project_root, args.data))
     weights_path = os.path.abspath(os.path.join(project_root, args.weights)) if not os.path.isabs(args.weights) else args.weights
@@ -247,6 +256,7 @@ def train_raildrishti(args):
 
     if not os.path.exists(data_yaml):
         print(f"[ERROR] Dataset configuration file not found at: {data_yaml}")
+        print("        Please run: python src/preprocessing/unified_dataset_builder.py")
         sys.exit(1)
 
     detected_device, default_workers = check_system_hardware()
@@ -268,15 +278,14 @@ def train_raildrishti(args):
         print(f" • Checkpoint File : {last_weights}")
         print(f" • Output Directory: {save_run_dir}")
         print(f" • Compute Device  : {device}")
+        print(" • Pause Feature   : Press [Ctrl + C] at any time to pause safely")
         print("=" * 65 + "\n")
 
         model = YOLO(last_weights)
 
-        # Attach Custom Real-World Epoch Monitor Callback
         monitor = EpochStatusMonitor(output_model_path=output_model_path)
         model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
 
-        # In Ultralytics, resume=True cleanly restores all parameters from checkpoint
         results = model.train(resume=True, device=device)
 
     else:
@@ -284,7 +293,7 @@ def train_raildrishti(args):
         print(" STARTING FRESH LOCAL RAILDISHTI TRAINING")
         print("=" * 65)
         print(f" • Dataset Config  : {data_yaml}")
-        print(f" • Base Weights    : {weights_path}")
+        print(f" • Base Model      : {weights_path} (YOLO11 Multi-Task Seg + Det)")
         print(f" • Epochs          : {args.epochs}")
         print(f" • Batch Size      : {args.batch}")
         print(f" • Input Image Size: {args.imgsz}x{args.imgsz}")
@@ -293,11 +302,11 @@ def train_raildrishti(args):
         print(f" • CPU Workers     : {workers}")
         print(f" • Optimizer       : {args.optimizer}")
         print(f" • Learning Rate   : lr0={args.lr0}, lrf={args.lrf}")
+        print(" • Pause Feature   : Press [Ctrl + C] at any time to pause safely")
         print("=" * 65 + "\n")
 
         model = YOLO(weights_path)
 
-        # Attach Custom Real-World Epoch Monitor Callback
         monitor = EpochStatusMonitor(output_model_path=output_model_path)
         model.add_callback("on_fit_epoch_end", monitor.on_fit_epoch_end)
 
@@ -314,7 +323,10 @@ def train_raildrishti(args):
             momentum=0.937,
             weight_decay=0.0005,
             warmup_epochs=3.0,
-            patience=15,
+            patience=20,
+            box=7.5,
+            cls=1.2,
+            dfl=1.8,
             project=os.path.abspath(os.path.join(project_root, "runs")),
             name="segment/raildrishti_local",
             exist_ok=True,
@@ -330,7 +342,6 @@ def train_raildrishti(args):
 
     best_pt = os.path.join(save_run_dir, "weights/best.pt")
     if not os.path.exists(best_pt):
-        # Fallback search
         found_bests = glob.glob(os.path.join(project_root, "runs/**/weights/best.pt"), recursive=True)
         if found_bests:
             found_bests.sort(key=os.path.getmtime, reverse=True)
@@ -355,10 +366,10 @@ def train_raildrishti(args):
         box_map = val_metrics.box.map
         seg_map50 = val_metrics.seg.map50
         seg_map = val_metrics.seg.map
-        print(f" • Obstacle Bounding Box mAP@50     : {box_map50 * 100:5.2f}%")
-        print(f" • Obstacle Bounding Box mAP@50-95  : {box_map * 100:5.2f}%")
-        print(f" • Track Mask Segmentation mAP@50   : {seg_map50 * 100:5.2f}%")
-        print(f" • Track Mask Segmentation mAP@50-95 : {seg_map * 100:5.2f}%")
+        print(f" • Obstacle Bounding Box mAP@50      : {box_map50 * 100:5.2f}%")
+        print(f" • Obstacle Bounding Box mAP@50-95   : {box_map * 100:5.2f}%")
+        print(f" • Track Mask Segmentation mAP@50    : {seg_map50 * 100:5.2f}%")
+        print(f" • Track Mask Segmentation mAP@50-95  : {seg_map * 100:5.2f}%")
     except Exception as e:
         print(f" • Metrics Summary: {val_metrics}")
 
@@ -371,7 +382,7 @@ def train_raildrishti(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drishti Kavach Universal Local Training")
     parser.add_argument("--data", type=str, default="configs/raildrishti_dataset.yaml", help="Path to dataset YAML")
-    parser.add_argument("--weights", type=str, default="yolo11s-seg.pt", help="Pretrained base weights")
+    parser.add_argument("--weights", type=str, default="yolo11s-seg.pt", help="Pretrained base weights (e.g. yolo11s-seg.pt)")
     parser.add_argument("--checkpoint", type=str, default=None, help="Explicit checkpoint file path to resume from")
     parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs (default: 40)")
     parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")

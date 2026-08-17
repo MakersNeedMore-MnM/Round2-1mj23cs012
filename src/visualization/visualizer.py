@@ -24,8 +24,8 @@ class DrishtiVisualizer:
     def __init__(self):
         # High-Contrast Track Colors (matching pristine_test)
         self.COLOR_TRACK_BED = (255, 180, 0)     # Translucent Cyan-Blue (BGR)
-        self.COLOR_RAIL_LINES = (0, 255, 100)    # Glowing Emerald Green (BGR)
-        self.COLOR_RAIL_BORDER = (0, 210, 80)    # Rail Outline (BGR)
+        self.COLOR_RAIL_LINES = (35, 15, 140)       # Solid Maroon / Crimson (BGR)
+        self.COLOR_RAIL_BORDER = (15, 5, 80)        # Dark Maroon Edge (BGR)
 
         # Three-Tier Threat Colors
         self.COLOR_CRITICAL = (0, 0, 230)       # Vivid Red (BGR)
