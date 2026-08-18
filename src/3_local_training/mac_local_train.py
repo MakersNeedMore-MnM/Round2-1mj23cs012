@@ -87,21 +87,33 @@ def setup_graceful_interrupt():
     signal.signal(signal.SIGINT, handle_interrupt)
 
 
+def get_metric_color(val: float) -> str:
+    """Returns ANSI color code based on accuracy value."""
+    if val >= 90.0:
+        return "\033[1;92m"    # Bold Bright Green (Deployment Ready)
+    elif val >= 80.0:
+        return "\033[92m"      # Standard Green (Operational)
+    elif val >= 65.0:
+        return "\033[93m"      # Yellow (Improving)
+    elif val >= 45.0:
+        return "\033[95m"      # Magenta (Early Learning)
+    else:
+        return "\033[91m"      # Red (Low / Initializing)
+
+
 class MacM4StatusMonitor:
     """
-    Tracks training progress and displays a minimal, color-coded (Red -> Green)
-    accuracy evaluation comparing metrics against real-world deployment targets.
+    Tracks training progress and displays a minimal, 2-3 line color-coded
+    accuracy report comparing current metrics against expected targets.
     """
     
-    TARGET_BOX_MAP = 85.0      # Required for reliable obstacle braking
-    TARGET_SEG_MAP = 90.0      # Required for pinpoint track geometry locking
-    TARGET_OVERALL_MAP = 85.0  # Overall deployment threshold
+    TARGET_BOX_MAP = 85.0      # Expected for obstacle detection
+    TARGET_SEG_MAP = 90.0      # Expected for track segmentation
+    TARGET_OVERALL_MAP = 85.0  # Overall expected accuracy
 
     def __init__(self, output_model_path: str = None):
         self.best_map = 0.0
         self.best_epoch = 0
-        self.prev_loss = None
-        self.prev_map = None
         self.output_model_path = output_model_path
 
     def on_fit_epoch_end(self, trainer):
@@ -124,7 +136,7 @@ class MacM4StatusMonitor:
 
         # Check if new all-time best
         is_new_best = False
-        if overall_map50 > self.best_map and overall_map50 > 2.0:
+        if overall_map50 > self.best_map and overall_map50 > 1.0:
             self.best_map = overall_map50
             self.best_epoch = epoch
             is_new_best = True
@@ -135,51 +147,20 @@ class MacM4StatusMonitor:
                 except Exception:
                     pass
 
-        # Color-coded gradient from Red (Worse) -> Green (Best)
-        if overall_map50 >= 90.0:
-            state_tag = "🏆 [DEPLOYMENT READY / BEST]"
-            color = "\033[1;92m"    # Bold Bright Emerald Green
-        elif overall_map50 >= 80.0:
-            state_tag = "🌟 [OPERATIONAL GRADE / GOOD]"
-            color = "\033[92m"      # Standard Green
-        elif overall_map50 >= 65.0:
-            state_tag = "⚡ [CONVERGING / MEDIUM]"
-            color = "\033[93m"      # Yellow
-        elif overall_map50 >= 45.0:
-            state_tag = "⏳ [EARLY LEARNING / LOW]"
-            color = "\033[95m"      # Magenta
-        else:
-            state_tag = "🔴 [INITIALIZING / PRE-CONVERGENCE]"
-            color = "\033[91m"      # Red
-            
-        reset_c = "\033[0m"
+        # Dynamic Color Mapping
+        c_overall = get_metric_color(overall_map50)
+        c_seg = get_metric_color(seg_map50)
+        c_box = get_metric_color(box_map50)
+        c_best = get_metric_color(self.best_map)
+        rst = "\033[0m"
 
-        # Loss Delta Indicator
         loss_str = f"{loss_val:.4f}" if loss_val is not None else "N/A"
-        if loss_val is not None and self.prev_loss is not None:
-            d_loss = loss_val - self.prev_loss
-            loss_str += f" ({'▼' if d_loss < 0 else '▲'}{abs(d_loss):.4f})"
+        best_deploy_msg = f" (★ Saved to {self.output_model_path})" if is_new_best else ""
 
-        # Accuracy Delta Indicator
-        acc_str = f"{overall_map50:.1f}%"
-        if self.prev_map is not None and overall_map50 > 0:
-            d_map = overall_map50 - self.prev_map
-            acc_str += f" ({'+' if d_map >= 0 else ''}{d_map:.1f}%)"
-
-        print("\n" + "─" * 70)
-        print(f" 📊 {color}EPOCH [{epoch:02d}/{total_epochs:02d}] ACCURACY EVALUATION: {state_tag}{reset_c}")
-        print("─" * 70)
-        print(f"  • Overall mAP50    : {color}{acc_str}{reset_c}  (Target: ≥{self.TARGET_OVERALL_MAP:.0f}%)")
-        print(f"  • Track Segm mAP50 : {seg_map50:.1f}%  (Target: ≥{self.TARGET_SEG_MAP:.0f}%)")
-        print(f"  • Obstacle Box mAP : {box_map50:.1f}%  (Target: ≥{self.TARGET_BOX_MAP:.0f}%)")
-        print(f"  • Training Loss    : {loss_str}")
-        print(f"  • Best Result So Far: \033[1m{self.best_map:.1f}% mAP\033[0m (at Epoch {self.best_epoch})")
-        if is_new_best:
-            print(f"  • \033[92m★ New Best Checkpoint Saved & Deployed to {self.output_model_path}\033[0m")
-        print("─" * 70 + "\n")
-
-        self.prev_loss = loss_val
-        self.prev_map = overall_map50
+        # Minimal 2-3 line color-coded output
+        print(f"\nEpoch [{epoch:02d}/{total_epochs:02d}] -> Current Accuracy: {c_overall}{overall_map50:.1f}%{rst} (Expected: ≥{self.TARGET_OVERALL_MAP:.0f}%) | Loss: {loss_str}")
+        print(f"Metrics: Track Segm mAP: {c_seg}{seg_map50:.1f}%{rst} (Expected: ≥{self.TARGET_SEG_MAP:.0f}%) | Obstacle Box mAP: {c_box}{box_map50:.1f}%{rst} (Expected: ≥{self.TARGET_BOX_MAP:.0f}%)")
+        print(f"Best Accuracy: {c_best}{self.best_map:.1f}%{rst} at Epoch {self.best_epoch}{best_deploy_msg}\n")
 
 
 def find_latest_checkpoint() -> str:
