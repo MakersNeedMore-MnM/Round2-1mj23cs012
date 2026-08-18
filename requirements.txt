@@ -11,3 +11,4 @@ tqdm>=4.66.0
 flask>=3.0.0
 requests>=2.31.0
 shapely>=2.0.0
+jupyter-server>=2.0.0
