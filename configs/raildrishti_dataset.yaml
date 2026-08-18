@@ -1,15 +1,14 @@
-path: dataset_rail-drishti
+path: /Users/alvinsonny/Desktop/drishti-kavach/dataset_rail-drishti
 train: images/train
 val: images/val
 names:
   0: Rail_Track_Bed
   1: Rail_Lines
-  2: Branch
-  3: IronRod
-  4: Barrel
-  5: Boulder
-  6: Jerrycan
-  7: Person
-  8: Cattle
-  9: Animal
-  10: Vehicle
+  2: Person
+  3: Car
+  4: Truck
+  5: Branch
+  6: IronRod
+  7: Barrel
+  8: Boulder
+  9: Jerrycan
