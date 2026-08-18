@@ -27,18 +27,19 @@ processed_data/
 
 # Model Checkpoints, Pretrained Weights, and Training Runs
 runs/
+models/
 *.pt
 *.pth
 *.onnx
 *.engine
 *.tflite
-models/*.pt
-models/*.onnx
 
 # Output Images, Recordings, Snapshots, and Verification Previews
-outputs/*
+outputs/
+previews/
 
 # Research Paper Directory & LaTeX Artifacts
+\[#\]\ paper/
 paper/
 *.aux
 *.log
