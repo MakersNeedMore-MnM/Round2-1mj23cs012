@@ -13,7 +13,9 @@ Design Philosophy:
 from typing import List, Tuple, Dict, Optional
 import cv2
 import numpy as np
-from src.spatial_reasoning.hazard_analyzer import HazardAssessment
+import importlib
+_spatial = importlib.import_module("src.5_spatial_reasoning.hazard_analyzer")
+HazardAssessment = _spatial.HazardAssessment
 
 
 class DrishtiVisualizer:

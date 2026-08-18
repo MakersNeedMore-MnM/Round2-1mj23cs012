@@ -15,10 +15,17 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
+import importlib
 
-from src.pipeline.weather_enhancer import WeatherEnhancer
-from src.spatial_reasoning.hazard_analyzer import SpatialHazardAnalyzer, HazardAssessment
-from src.visualization.visualizer import DrishtiVisualizer
+_weather = importlib.import_module("src.7_pipeline.weather_enhancer")
+WeatherEnhancer = _weather.WeatherEnhancer
+
+_spatial = importlib.import_module("src.5_spatial_reasoning.hazard_analyzer")
+SpatialHazardAnalyzer = _spatial.SpatialHazardAnalyzer
+HazardAssessment = _spatial.HazardAssessment
+
+_vis = importlib.import_module("src.6_visualization.visualizer")
+DrishtiVisualizer = _vis.DrishtiVisualizer
 
 
 class DrishtiEngine:

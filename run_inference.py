@@ -37,7 +37,7 @@ import glob
 import cv2
 import numpy as np
 
-from src.pipeline.drishti_engine import DrishtiEngine
+from src import DrishtiEngine
 
 
 def run_inference(
