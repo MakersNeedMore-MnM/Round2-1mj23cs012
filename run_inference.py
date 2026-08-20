@@ -35,6 +35,7 @@ import sys
 import time
 import argparse
 import glob
+from pathlib import Path
 import cv2
 import numpy as np
 
@@ -117,12 +118,19 @@ def run_inference(
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps_in = cap.get(cv2.CAP_PROP_FPS)
         fps_in = fps_in if fps_in > 0 else 30.0
-        out_video_path = os.path.join(output_dir, f"result_stream_{int(time.time())}.mp4")
+        
+        base_src_name = Path(source).stem if not source.isdigit() else f"stream_{int(time.time())}"
+        out_video_path = os.path.join(output_dir, f"result_{base_src_name}.mp4")
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(out_video_path, fourcc, fps_in, (w, h))
+        print(f"[+] Output video will be saved to: {out_video_path}")
 
     show_hud = True
     paused = False
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if not source.isdigit() else None
+    
+    from tqdm import tqdm
+    pbar = tqdm(total=total_frames, desc="Processing Video", unit="frame") if total_frames and total_frames > 0 else None
 
     print("\n" + "=" * 75)
     print(" 🚀 DRISHTI KAVACH REAL-TIME STREAM ACTIVE")
@@ -147,6 +155,10 @@ def run_inference(
 
                 if writer is not None:
                     writer.write(rendered)
+                    
+                if pbar is not None:
+                    pbar.update(1)
+                    pbar.set_postfix({"status": status, "hazards": len(hazards), "fps": f"{telemetry['fps']:.1f}"})
 
             if show_view:
                 cv2.imshow("Drishti Kavach - Railway Clearance ATP", rendered)
@@ -159,18 +171,21 @@ def run_inference(
                 elif key in [ord("s"), ord("S")]:
                     snap_path = os.path.join(snapshot_dir, f"snap_{int(time.time())}.jpg")
                     cv2.imwrite(snap_path, rendered)
-                    print(f"[+] Snapshot saved: {snap_path}")
+                    print(f"\n[+] Snapshot saved: {snap_path}")
                 elif key == 32:  # SPACE
                     paused = not paused
                 elif key in [ord("d"), ord("D")]:
                     modes = ["auto", "clahe", "dcp", "off"]
                     cur_idx = modes.index(engine.weather_mode) if engine.weather_mode in modes else 0
                     engine.weather_mode = modes[(cur_idx + 1) % len(modes)]
-                    print(f"[*] Switched Weather Mode to: {engine.weather_mode.upper()}")
+                    print(f"\n[*] Switched Weather Mode to: {engine.weather_mode.upper()}")
     finally:
+        if pbar is not None:
+            pbar.close()
         cap.release()
         if writer is not None:
             writer.release()
+            print(f"\n[+] Successfully saved output video to: {out_video_path}")
         if show_view:
             cv2.destroyAllWindows()
 
