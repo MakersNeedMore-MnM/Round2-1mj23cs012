@@ -1,0 +1,36 @@
+====================================================================================================
+                        DRISHTI-KAVACH: UNIFIED OBSTACLE DETECTION TAXONOMY
+====================================================================================================
+System: Indian Railways Optical Automatic Train Protection (ATP) & Visual Kavach
+Detector Model: YOLO11m (2D Bounding Box Object Detection with Active 850nm NIR Night Vision)
+====================================================================================================
+
+CLASS ID | CLASS NAME     | DATASET SOURCE                     | HAZARD CATEGORY & OPERATIONAL DESCRIPTION
+---------+----------------+------------------------------------+------------------------------------------------------------
+   0     | Person         | RailSem19 & UAV-RSOD V2            | Trespassers, pedestrians, track workers, station commuters
+   1     | Car            | RailSem19 (Label 13: car)          | Road vehicles stalled at level crossings or trespassing
+   2     | Truck          | RailSem19 (Label 14: truck/bus)    | Heavy trucks, buses, tractors, construction vehicles at LC
+   3     | Branch         | UAV-RSOD V2 (Class: Branch)        | Fallen tree branches, monsoon storm debris, foliage blocks
+   4     | IronRod        | UAV-RSOD V2 (Class: IronRod)       | Deliberate track sabotage: steel girders, iron rods, rails
+   5     | Boulder        | UAV-RSOD V2 (Class: Boulder)       | Landslides, rockfalls, deliberate concrete ballast boulders
+   6     | Barrel         | UAV-RSOD V2 (Class: Barrel)        | Industrial oil drums, chemical barrels placed on track
+   7     | Jerrycan       | UAV-RSOD V2 (Class: Jerrycan)      | Flammable fuel cans, accelerants, sabotage canisters
+
+====================================================================================================
+CRITICAL RULES & EXCLUSIONS:
+====================================================================================================
+1. TRAIN / ON-RAILS EXCLUSION:
+   - RailSem19 Label 16 ('on-rails' - trains, locomotives, wagons, trams) is STRICTLY EXCLUDED.
+   - The detector will NEVER generate a bounding box on a train itself, preventing false alarms
+     from oncoming trains on parallel tracks or yard wagons.
+
+2. SENSOR & DAY/NIGHT AUGMENTATION:
+   - 50% Daylight RGB + 50% Synthetic 850nm Active Infrared (NIR) pairs generated for every image.
+   - Ensures robust detection under locomotive headlight beams, fog dehazing, and pitch-dark night.
+
+3. THREE-TIER ATP HAZARD REASONING:
+   - Detected Bounding Box Bottom Ground Footprint (F_k) is projected onto BiSeNetV2 Track Mask:
+     * CRITICAL (In-Track): Footprint touches running rails / track gauge -> Kavach Emergency Brake
+     * WARNING (Near-Track): Footprint inside warning buffer envelope -> Loco Pilot HUD Alert
+     * SAFE (Off-Track): Footprint on adjacent platform/slope -> Logged as safe (No Alarm)
+====================================================================================================

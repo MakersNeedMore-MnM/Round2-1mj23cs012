@@ -16,9 +16,7 @@ build/
 Thumbs.db
 
 # Large Datasets & Raw Archives (Ignored from Git)
-dataset_railsem19/
-dataset_uav-rsod/
-dataset_rail-drishti/
+dataset_*/
 processed_data/
 *.zip
 *.tar
@@ -38,11 +36,14 @@ models/
 outputs/
 previews/
 
+# Logs and Runtime Diagnostics
+*.log
+running_log.txt
+
 # Research Paper Directory & LaTeX Artifacts
-\[#\]\ paper/
+[#] paper/
 paper/
 *.aux
-*.log
 *.out
 *.toc
 *.nav
