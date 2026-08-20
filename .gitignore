@@ -35,6 +35,8 @@ models/
 # Output Images, Recordings, Snapshots, and Verification Previews
 outputs/
 previews/
+test_images/
+test_images_night/
 
 # Logs and Runtime Diagnostics
 *.log

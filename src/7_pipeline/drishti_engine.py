@@ -52,7 +52,7 @@ class DrishtiEngine:
 
     def __init__(
         self,
-        seg_model_path: str = "models/raildrishti_seg_universal.pth",
+        seg_model_path: str = "models/RailDrishti_Seg_Universal.pth",
         det_model_path: str = "models/best_yolo11m_raildrishti.pt",
         conf_thresh: float = 0.35,
         imgsz: int = 1024,

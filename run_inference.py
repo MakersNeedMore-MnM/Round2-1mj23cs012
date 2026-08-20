@@ -43,7 +43,7 @@ from src import DrishtiEngine
 
 def run_inference(
     source: str = "0",
-    seg_model_path: str = "models/raildrishti_seg_universal.pth",
+    seg_model_path: str = "models/RailDrishti_Seg_Universal.pth",
     det_model_path: str = "models/best_yolo11m_raildrishti.pt",
     conf_thresh: float = 0.35,
     imgsz: int = 1024,
@@ -178,7 +178,7 @@ def run_inference(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Inference")
     parser.add_argument("--source", type=str, default="0", help="Video source (camera index, path, URL)")
-    parser.add_argument("--seg-model", type=str, default="models/raildrishti_seg_universal.pth", help="BiSeNetV2 weights")
+    parser.add_argument("--seg-model", type=str, default="models/RailDrishti_Seg_Universal.pth", help="BiSeNetV2 weights")
     parser.add_argument("--det-model", type=str, default="models/best_yolo11m_raildrishti.pt", help="YOLO11m weights")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold")
     parser.add_argument("--imgsz", type=int, default=1024, help="Obstacle detection resolution")
