@@ -3,9 +3,10 @@ Drishti Kavach: Real-Time Railway Physical Obstacle & Track Clearance Inference 
 
 CLI Flags & Usage:
   --source STR/INT : Input source: '0' (Webcam), 'video.mp4', 'image.jpg', 'dir/', 'rtsp://...' (default: 0)
-  --model STR      : Path to trained weights (default: models/RailDrishti.pt)
-  --conf FLOAT     : Confidence threshold (default: 0.35)
-  --imgsz INT      : Inference resolution (default: 1024)
+  --seg-model STR  : Path to BiSeNetV2 segmentation model (default: models/raildrishti_seg_universal.pth)
+  --det-model STR  : Path to YOLO11m obstacle detection model (default: models/best_yolo11m_raildrishti.pt)
+  --conf FLOAT     : Confidence threshold for obstacles (default: 0.35)
+  --imgsz INT      : Inference resolution for obstacles (default: 1024)
   --weather STR    : Weather optimizer: 'auto', 'clahe', 'dcp', 'rain', 'off' (default: auto)
   --sensor STR     : Sensor label: 'DAYLIGHT RGB' or '850nm ACTIVE IR CCTV' (default: DAYLIGHT RGB)
   --save           : Save annotated output stream to outputs/inference_results/
@@ -19,14 +20,14 @@ Interactive Keyboard Controls (in GUI Window):
   [SPACE]          : Pause / Resume stream
 
 Examples:
-  # 1. Live Kreo Owl Lite / Arducam USB Webcam:
+  # 1. Live USB Camera:
   python run_inference.py --source 0
 
-  # 2. Process a Test Video with Auto-Defogging:
-  python run_inference.py --source data/train_test.mp4 --weather auto --save
+  # 2. Process a Test Image:
+  python run_inference.py --source dataset_segmentation/images/val/rs06769_day.jpg --save
 
-  # 3. Process Active IR Night Vision Stream:
-  python run_inference.py --source 0 --sensor "850nm ACTIVE IR CCTV"
+  # 3. Process Video with Active IR Night Vision:
+  python run_inference.py --source test_rail.mp4 --sensor "850nm ACTIVE IR CCTV"
 """
 
 import os
@@ -42,7 +43,8 @@ from src import DrishtiEngine
 
 def run_inference(
     source: str = "0",
-    model_path: str = "models/RailDrishti.pt",
+    seg_model_path: str = "models/raildrishti_seg_universal.pth",
+    det_model_path: str = "models/best_yolo11m_raildrishti.pt",
     conf_thresh: float = 0.35,
     imgsz: int = 1024,
     weather_mode: str = "auto",
@@ -56,184 +58,141 @@ def run_inference(
         os.makedirs(output_dir, exist_ok=True)
     os.makedirs(snapshot_dir, exist_ok=True)
 
-    # Initialize Engine
+    # Initialize Decoupled Engine
     engine = DrishtiEngine(
-        model_path=model_path,
+        seg_model_path=seg_model_path,
+        det_model_path=det_model_path,
         conf_thresh=conf_thresh,
         imgsz=imgsz,
         weather_mode=weather_mode
     )
 
-    # Determine input type
-    is_webcam = source.isdigit()
-    is_image = False
-    is_directory = False
-    is_video = False
+    # 1. Check if source is a single image
+    is_img = False
+    valid_exts = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+    if os.path.isfile(source) and any(source.lower().endswith(ext) for ext in valid_exts):
+        is_img = True
 
-    if is_webcam:
-        cam_idx = int(source)
-        cap = cv2.VideoCapture(cam_idx)
-        # Request 1080p full resolution
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-        is_video = True
-    elif os.path.isdir(source):
-        is_directory = True
-    elif os.path.isfile(source):
-        ext = os.path.splitext(source)[1].lower()
-        if ext in [".jpg", ".jpeg", ".png", ".bmp", ".webp"]:
-            is_image = True
-        elif ext in [".mp4", ".avi", ".mov", ".mkv"]:
-            is_video = True
-            cap = cv2.VideoCapture(source)
-    elif source.startswith("rtsp://") or source.startswith("http://"):
-        is_video = True
-        cap = cv2.VideoCapture(source)
-    else:
-        print(f"[!] Invalid source: {source}")
-        return
-
-    # 1. Handle Single Image
-    if is_image:
+    if is_img:
         frame = cv2.imread(source)
         if frame is None:
-            print(f"[!] Could not read image: {source}")
+            print(f"[!] Error: Could not load image: {source}")
             return
-        
+
         rendered, status, hazards, telemetry = engine.process_frame(
-            frame, sensor_type=sensor_type, show_hud=True
+            frame, sensor_type=sensor_type, show_hud=True, is_video_stream=False
         )
 
-        out_name = f"result_{os.path.basename(source)}"
-        out_path = os.path.join(output_dir, out_name)
-        cv2.imwrite(out_path, rendered)
-        print(f"\n[+] Status: {status} | Processed image saved to: {out_path}")
+        print(f"\n[*] Processing Complete for: {source}")
+        print(f"  • Clearance Status: {status}")
+        print(f"  • Hazards Detected: {len(hazards)}")
+        print(f"  • Frame Rate:       {telemetry['fps']:.1f} FPS")
+
+        if save_output:
+            out_name = f"result_{os.path.basename(source)}"
+            out_path = os.path.join(output_dir, out_name)
+            cv2.imwrite(out_path, rendered)
+            print(f"[+] Saved result to: {out_path}")
 
         if show_view:
-            cv2.namedWindow("Drishti Kavach - Railway HUD", cv2.WINDOW_NORMAL)
-            cv2.resizeWindow("Drishti Kavach - Railway HUD", 1280, 720)
-            cv2.imshow("Drishti Kavach - Railway HUD", rendered)
-            print("\n[Press any key in the window to exit...]")
+            cv2.imshow("Drishti Kavach - Railway Clearance ATP", rendered)
+            print("\n[Controls] Press any key in the window to exit.")
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         return
 
-    # 2. Handle Image Directory
-    if is_directory:
-        img_files = sorted(
-            glob.glob(os.path.join(source, "*.jpg")) +
-            glob.glob(os.path.join(source, "*.jpeg")) +
-            glob.glob(os.path.join(source, "*.png"))
-        )
-        print(f"\n[+] Processing {len(img_files)} images from: {source}")
-        for img_p in img_files:
-            frame = cv2.imread(img_p)
-            if frame is None:
-                continue
-            rendered, status, hazards, telemetry = engine.process_frame(
-                frame, sensor_type=sensor_type, show_hud=True
-            )
-            out_p = os.path.join(output_dir, f"result_{os.path.basename(img_p)}")
-            cv2.imwrite(out_p, rendered)
-            print(f"  [{status}] Saved: {out_p}")
-        print(f"\n[+] All images processed and saved to: {output_dir}")
+    # 2. Video Capture Stream
+    if source.isdigit():
+        cap = cv2.VideoCapture(int(source))
+    else:
+        cap = cv2.VideoCapture(source)
+
+    if not cap.isOpened():
+        print(f"[!] Error: Could not open video source: {source}")
         return
 
-    # 3. Handle Live Webcam / Video Stream
-    if is_video:
-        if not cap.isOpened():
-            print(f"[!] Failed to open video source: {source}")
-            return
+    writer = None
+    if save_output:
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps_in = cap.get(cv2.CAP_PROP_FPS)
+        fps_in = fps_in if fps_in > 0 else 30.0
+        out_video_path = os.path.join(output_dir, f"result_stream_{int(time.time())}.mp4")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(out_video_path, fourcc, fps_in, (w, h))
 
-        w_in = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h_in = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps_in = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    show_hud = True
+    paused = False
 
-        writer = None
-        if save_output:
-            out_vid_path = os.path.join(output_dir, f"drishti_kavach_stream_{int(time.time())}.mp4")
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            writer = cv2.VideoWriter(out_vid_path, fourcc, fps_in, (w_in, h_in))
-            print(f"[+] Recording stream output to: {out_vid_path}")
+    print("\n" + "=" * 75)
+    print(" 🚀 DRISHTI KAVACH REAL-TIME STREAM ACTIVE")
+    print(" • Press [Q] or [ESC] to Quit")
+    print(" • Press [D] to Cycle Weather Defogging Modes")
+    print(" • Press [H] to Toggle HUD Dashboard")
+    print(" • Press [S] to Save Snapshot")
+    print(" • Press [SPACE] to Pause / Resume")
+    print("=" * 75 + "\n")
 
-        print("\n" + "=" * 75)
-        print(" 🚆 DRISHTI KAVACH LIVE STREAM ACTIVE")
-        print(" Controls:")
-        print("  • [Q] or [ESC] : Quit")
-        print("  • [D]          : Cycle Defogger (Auto -> CLAHE -> DCP -> Off)")
-        print("  • [H]          : Toggle HUD Telemetry Overlay")
-        print("  • [S]          : Save Frame Snapshot")
-        print("  • [SPACE]      : Pause / Resume")
-        print("=" * 75 + "\n")
-
-        weather_cycle = ["auto", "clahe", "dcp", "rain", "off"]
-        weather_idx = weather_cycle.index(weather_mode) if weather_mode in weather_cycle else 0
-        show_hud = True
-        is_paused = False
-
-        if show_view:
-            cv2.namedWindow("Drishti Kavach - Railway HUD", cv2.WINDOW_NORMAL)
-            cv2.resizeWindow("Drishti Kavach - Railway HUD", 1280, 720)
-
+    try:
         while True:
-            if not is_paused:
+            if not paused:
                 ret, frame = cap.read()
-                if not ret:
-                    print("[+] End of video stream.")
+                if not ret or frame is None:
+                    print("\n[*] End of video stream reached.")
                     break
 
                 rendered, status, hazards, telemetry = engine.process_frame(
-                    frame,
-                    sensor_type=sensor_type,
-                    show_hud=show_hud,
-                    is_video_stream=True
+                    frame, sensor_type=sensor_type, show_hud=show_hud, is_video_stream=True
                 )
 
                 if writer is not None:
                     writer.write(rendered)
 
             if show_view:
-                cv2.imshow("Drishti Kavach - Railway HUD", rendered)
+                cv2.imshow("Drishti Kavach - Railway Clearance ATP", rendered)
                 key = cv2.waitKey(1) & 0xFF
 
-                if key in [ord('q'), ord('Q'), 27]:  # Quit
+                if key in [ord("q"), ord("Q"), 27]:  # ESC
                     break
-                elif key in [ord('d'), ord('D')]:    # Cycle Defogger
-                    weather_idx = (weather_idx + 1) % len(weather_cycle)
-                    engine.weather_mode = weather_cycle[weather_idx]
-                    print(f"[*] Weather Enhancement set to: {engine.weather_mode.upper()}")
-                elif key in [ord('h'), ord('H')]:    # Toggle HUD
+                elif key in [ord("h"), ord("H")]:
                     show_hud = not show_hud
-                elif key in [ord('s'), ord('S')]:    # Snapshot
-                    snap_path = os.path.join(snapshot_dir, f"snapshot_{int(time.time()*1000)}.jpg")
+                elif key in [ord("s"), ord("S")]:
+                    snap_path = os.path.join(snapshot_dir, f"snap_{int(time.time())}.jpg")
                     cv2.imwrite(snap_path, rendered)
-                    print(f"[+] Snapshot saved to: {snap_path}")
-                elif key == 32:                      # Space (Pause/Resume)
-                    is_paused = not is_paused
-
+                    print(f"[+] Snapshot saved: {snap_path}")
+                elif key == 32:  # SPACE
+                    paused = not paused
+                elif key in [ord("d"), ord("D")]:
+                    modes = ["auto", "clahe", "dcp", "off"]
+                    cur_idx = modes.index(engine.weather_mode) if engine.weather_mode in modes else 0
+                    engine.weather_mode = modes[(cur_idx + 1) % len(modes)]
+                    print(f"[*] Switched Weather Mode to: {engine.weather_mode.upper()}")
+    finally:
         cap.release()
         if writer is not None:
             writer.release()
         if show_view:
             cv2.destroyAllWindows()
-        print("\n[+] Drishti Kavach Engine terminated cleanly.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Inference & Decision Engine")
-    parser.add_argument("--source", type=str, default="0", help="Camera index ('0'), video file, image, or RTSP URL")
-    parser.add_argument("--model", type=str, default="models/RailDrishti.pt", help="Path to trained RailDrishti model")
+    parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Inference")
+    parser.add_argument("--source", type=str, default="0", help="Video source (camera index, path, URL)")
+    parser.add_argument("--seg-model", type=str, default="models/raildrishti_seg_universal.pth", help="BiSeNetV2 weights")
+    parser.add_argument("--det-model", type=str, default="models/best_yolo11m_raildrishti.pt", help="YOLO11m weights")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold")
-    parser.add_argument("--imgsz", type=int, default=1024, help="Inference resolution")
-    parser.add_argument("--weather", type=str, default="auto", choices=["auto", "clahe", "dcp", "rain", "off"], help="Harsh weather mode")
-    parser.add_argument("--sensor", type=str, default="DAYLIGHT RGB", help="Sensor label (e.g. 'DAYLIGHT RGB' or '850nm ACTIVE IR CCTV')")
-    parser.add_argument("--save", action="store_true", help="Save output video / image results")
-    parser.add_argument("--no-view", action="store_true", help="Run without opening GUI window")
+    parser.add_argument("--imgsz", type=int, default=1024, help="Obstacle detection resolution")
+    parser.add_argument("--weather", type=str, default="auto", choices=["auto", "clahe", "dcp", "rain", "off"], help="Weather optimizer")
+    parser.add_argument("--sensor", type=str, default="DAYLIGHT RGB", help="Sensor label")
+    parser.add_argument("--save", action="store_true", help="Save output video/images")
+    parser.add_argument("--no-view", action="store_true", help="Headless mode without GUI")
+
     args = parser.parse_args()
 
     run_inference(
         source=args.source,
-        model_path=args.model,
+        seg_model_path=args.seg_model,
+        det_model_path=args.det_model,
         conf_thresh=args.conf,
         imgsz=args.imgsz,
         weather_mode=args.weather,
