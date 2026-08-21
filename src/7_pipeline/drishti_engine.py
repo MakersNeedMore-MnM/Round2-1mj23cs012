@@ -45,26 +45,55 @@ OBSTACLE_CLASSES = {
 }
 
 
+# Selected complementary COCO foundation classes for Indian Railways
+BASE_COMPLEMENTARY_CLASSES = {
+    0: "Person",
+    1: "Bicycle",
+    2: "Car",
+    3: "Motorcycle",
+    5: "Bus",
+    7: "Truck",
+    13: "Bench",
+    15: "Cat",
+    16: "Dog",
+    17: "Horse",
+    19: "Cow",
+    20: "Elephant",
+    21: "Bear",
+    22: "Zebra",
+    23: "Giraffe",
+    24: "Backpack",
+    25: "Umbrella",
+    26: "Handbag",
+    28: "Suitcase"
+}
+
+
 class DrishtiEngine:
     """
     Complete real-time perception pipeline for Indian Railways Optical Kavach.
+    Integrates Universal Track Segmentation + Dual-Layer Obstacle & Sabotage Detection.
     """
 
     def __init__(
         self,
         seg_model_path: str = "models/RailDrishti_Seg_Universal.pth",
-        det_model_path: str = "models/best_yolo11m_raildrishti.pt",
+        det_model_path: str = "models/RailDrishti_Det_YOLO11m.pt",
+        base_det_model_path: str = "yolo11m.pt",
         conf_thresh: float = 0.35,
         imgsz: int = 1024,
         device: Optional[str] = None,
         weather_mode: str = "auto",
-        warning_buffer_px: float = 65.0
+        warning_buffer_px: float = 65.0,
+        enable_base_detector: bool = True
     ):
         self.seg_model_path = seg_model_path
         self.det_model_path = det_model_path
+        self.base_det_model_path = base_det_model_path
         self.conf_thresh = conf_thresh
         self.imgsz = imgsz
         self.weather_mode = weather_mode
+        self.enable_base_detector = enable_base_detector
 
         # Hardware selection
         if device is None:
@@ -82,10 +111,11 @@ class DrishtiEngine:
             self.torch_device = torch.device(device if device != "0" else "cuda")
 
         print("=" * 75)
-        print(" 🛡️  INITIALIZING DRISHTI KAVACH REAL-TIME ENGINE (DECOUPLED)")
+        print(" 🛡️  INITIALIZING DRISHTI KAVACH REAL-TIME ENGINE (DUAL-LAYER)")
         print("=" * 75)
         print(f" • Segmentation Model: {self.seg_model_path}")
-        print(f" • Obstacle Detector:  {self.det_model_path}")
+        print(f" • Custom Det Model:   {self.det_model_path}")
+        print(f" • Base Det Model:     {self.base_det_model_path} ({len(BASE_COMPLEMENTARY_CLASSES)} classes enabled)")
         print(f" • Hardware Device:    {self.device}")
         print(f" • Target Resolution:  {imgsz}x{imgsz}")
         print(f" • Confidence Cutoff:  {conf_thresh:.2f}")
@@ -95,13 +125,11 @@ class DrishtiEngine:
         # 1. Load BiSeNetV2 Semantic Segmentation Model
         self.seg_model = BiSeNetV2(num_classes=3, is_training=False).to(self.torch_device)
         
-        # Check primary universal weights, then base weights fallback
         actual_seg_path = self.seg_model_path
         if not os.path.exists(actual_seg_path):
             fallback_path = "models/best_bisenetv2_raildrishti.pth"
             if os.path.exists(fallback_path):
                 actual_seg_path = fallback_path
-                print(f"[*] Using base segmentation weights: {fallback_path}")
 
         if os.path.exists(actual_seg_path):
             state_dict = torch.load(actual_seg_path, map_location=self.torch_device)
@@ -113,15 +141,24 @@ class DrishtiEngine:
 
         self.seg_model.eval()
 
-        # 2. Load YOLO11m Obstacle Detector
+        # 2. Load Custom YOLO11m Obstacle Detector (Layer 1: Sabotage & Railway Threats)
         if os.path.exists(self.det_model_path):
-            self.det_model = YOLO(self.det_model_path)
-            print(f"[+] Loaded YOLO11m Obstacle Model from: {self.det_model_path}")
+            self.custom_det = YOLO(self.det_model_path)
+            print(f"[+] Loaded Custom Railway Detector from: {self.det_model_path}")
         else:
-            print(f"[*] Obstacle weights '{self.det_model_path}' not found yet. Using 'yolo11m.pt' baseline.")
-            self.det_model = YOLO("yolo11m.pt")
+            print(f"[*] Custom weights '{self.det_model_path}' not found yet. Using 'yolo11m.pt'.")
+            self.custom_det = YOLO("yolo11m.pt")
 
-        self.names = OBSTACLE_CLASSES
+        self.custom_names = OBSTACLE_CLASSES
+
+        # 3. Load Base Foundation YOLO11m Model (Layer 2: Animals, Luggage & General Transport)
+        self.base_det = None
+        if self.enable_base_detector:
+            try:
+                self.base_det = YOLO(self.base_det_model_path)
+                print(f"[+] Loaded Complementary Base Foundation Detector: {self.base_det_model_path}")
+            except Exception as e:
+                print(f"[!] Warning: Could not load base foundation detector: {e}")
 
         # Subsystems
         self.weather_enhancer = WeatherEnhancer()
@@ -184,8 +221,12 @@ class DrishtiEngine:
         track_bed_polys = self._extract_polygons_from_mask(track_bed_mask, min_area=100)
         rail_lines_polys = self._extract_polygons_from_mask(rail_lines_mask, min_area=40)
 
-        # 3. YOLO11m Obstacle Detection Pass
-        det_results = self.det_model.predict(
+        # 3. Dual-Layer YOLO11m Obstacle Detection Pass
+        obstacles = []
+        custom_boxes_list = []
+
+        # Layer 1: Custom Railway Sabotage & Obstacle Detector
+        custom_res = self.custom_det.predict(
             source=enhanced_frame,
             imgsz=self.imgsz,
             conf=self.conf_thresh,
@@ -193,21 +234,67 @@ class DrishtiEngine:
             verbose=False
         )[0]
 
-        obstacles = []
-        if det_results.boxes is not None:
-            boxes = det_results.boxes.cpu().numpy()
+        if custom_res.boxes is not None:
+            boxes = custom_res.boxes.cpu().numpy()
             for idx in range(len(boxes)):
                 cls_id = int(boxes.cls[idx])
                 conf = float(boxes.conf[idx])
                 x1, y1, x2, y2 = boxes.xyxy[idx]
-                cname = self.names.get(cls_id, f"Obstacle_{cls_id}")
+                cname = self.custom_names.get(cls_id, f"Obstacle_{cls_id}")
 
+                box_tuple = (int(x1), int(y1), int(x2), int(y2))
+                custom_boxes_list.append(box_tuple)
                 obstacles.append({
-                    "box": (int(x1), int(y1), int(x2), int(y2)),
+                    "box": box_tuple,
                     "class_id": cls_id,
                     "class_name": cname,
-                    "confidence": conf
+                    "confidence": conf,
+                    "source": "custom_railway"
                 })
+
+        # Layer 2: Complementary Base Foundation Detector (Wildlife, Baggage, General Transport)
+        if self.base_det is not None:
+            base_res = self.base_det.predict(
+                source=enhanced_frame,
+                imgsz=self.imgsz,
+                conf=max(self.conf_thresh, 0.30),
+                classes=list(BASE_COMPLEMENTARY_CLASSES.keys()),
+                device=self.device,
+                verbose=False
+            )[0]
+
+            if base_res.boxes is not None:
+                b_boxes = base_res.boxes.cpu().numpy()
+                for idx in range(len(b_boxes)):
+                    b_cls_id = int(b_boxes.cls[idx])
+                    b_conf = float(b_boxes.conf[idx])
+                    bx1, by1, bx2, by2 = b_boxes.xyxy[idx]
+                    b_box = (int(bx1), int(by1), int(bx2), int(by2))
+                    b_cname = BASE_COMPLEMENTARY_CLASSES.get(b_cls_id, f"Object_{b_cls_id}")
+
+                    # Check IoU overlap with custom detections to avoid duplicate boxes
+                    is_duplicate = False
+                    for cb in custom_boxes_list:
+                        ix1 = max(b_box[0], cb[0])
+                        iy1 = max(b_box[1], cb[1])
+                        ix2 = min(b_box[2], cb[2])
+                        iy2 = min(b_box[3], cb[3])
+                        inter_area = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+                        b_area = (b_box[2] - b_box[0]) * (b_box[3] - b_box[1])
+                        c_area = (cb[2] - cb[0]) * (cb[3] - cb[1])
+                        union_area = b_area + c_area - inter_area
+                        if union_area > 0 and (inter_area / union_area) > 0.45:
+                            is_duplicate = True
+                            break
+
+                    if not is_duplicate:
+                        obstacles.append({
+                            "box": b_box,
+                            "class_id": 100 + b_cls_id,
+                            "class_name": b_cname,
+                            "confidence": b_conf,
+                            "source": "base_foundation"
+                        })
 
         # 4. Geometric Spatial Clearance Reasoning
         hazards, overall_status = self.hazard_analyzer.analyze(

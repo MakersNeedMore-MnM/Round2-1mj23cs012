@@ -106,11 +106,9 @@ drishti-kavach/
 ├── configs/                                 # System & taxonomy specifications
 │
 ├── models/                                  # Trained weights & production ONNX models
-│   ├── best_bisenetv2_raildrishti.pth       # 20-Epoch Base Checkpoint (89.27% Track Bed IoU)
-│   ├── raildrishti_seg_universal.pth        # Universal Dual Track Segmenter Checkpoint
-│   ├── raildrishti_seg_universal.onnx       # Universal Track Segmenter ONNX Export
-│   ├── best_yolo11m_raildrishti.pt          # 8-Class Railway Obstacle Detector Checkpoint
-│   └── best_yolo11m_raildrishti.onnx        # 8-Class Railway Obstacle Detector ONNX Export
+│   ├── RailDrishti_Seg_Universal.pth        # Universal Dual Track Segmenter Checkpoint (86.02% mIoU)
+│   ├── RailDrishti_Det_YOLO11m.pt           # Custom 8-Class Railway Sabotage Detector (60.8% mAP50)
+│   └── RailDrishti_Det_YOLO11m.onnx         # Custom 8-Class Railway Sabotage Detector ONNX Export
 │
 ├── src/                                     # Core source code modules
 │   │
