@@ -3,7 +3,7 @@ Drishti Kavach: Real-Time Railway Physical Obstacle & Track Clearance Inference 
 
 CLI Flags & Usage:
   --source STR/INT : Input source: '0' (Webcam), 'video.mp4', 'image.jpg', 'dir/', 'rtsp://...' (default: 0)
-  --seg-model STR  : Path to BiSeNetV2 segmentation model (default: models/RailDrishti_Seg_Universal.pth)
+  --seg-model STR  : Path to BiSeNetV2 segmentation model (default: models/RailDrishti_Seg_BiSeNetV2.pth)
   --det-model STR  : Path to YOLO11m obstacle detection model (default: models/RailDrishti_Det_YOLO11m.pt)
   --conf FLOAT     : Confidence threshold for obstacles (default: 0.35)
   --imgsz INT      : Inference resolution for obstacles (default: 1024)
@@ -44,7 +44,7 @@ from src import DrishtiEngine
 
 def run_inference(
     source: str = "0",
-    seg_model_path: str = "models/RailDrishti_Seg_Universal.pth",
+    seg_model_path: str = "models/RailDrishti_Seg_BiSeNetV2.pth",
     det_model_path: str = "models/RailDrishti_Det_YOLO11m.pt",
     conf_thresh: float = 0.35,
     imgsz: int = 1024,
@@ -193,7 +193,7 @@ def run_inference(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Inference")
     parser.add_argument("--source", type=str, default="0", help="Video source (camera index, path, URL)")
-    parser.add_argument("--seg-model", type=str, default="models/RailDrishti_Seg_Universal.pth", help="BiSeNetV2 weights")
+    parser.add_argument("--seg-model", type=str, default="models/RailDrishti_Seg_BiSeNetV2.pth", help="BiSeNetV2 weights")
     parser.add_argument("--det-model", type=str, default="models/RailDrishti_Det_YOLO11m.pt", help="YOLO11m weights")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold")
     parser.add_argument("--imgsz", type=int, default=1024, help="Obstacle detection resolution")

@@ -106,7 +106,7 @@ drishti-kavach/
 ├── configs/                                 # System & taxonomy specifications
 │
 ├── models/                                  # Trained weights & production ONNX models
-│   ├── RailDrishti_Seg_Universal.pth        # Universal Dual Track Segmenter Checkpoint (86.02% mIoU)
+│   ├── RailDrishti_Seg_BiSeNetV2.pth        # Universal Dual Track Segmenter Checkpoint (86.02% mIoU)
 │   ├── RailDrishti_Det_YOLO11m.pt           # Custom 8-Class Railway Sabotage Detector (60.8% mAP50)
 │   └── RailDrishti_Det_YOLO11m.onnx         # Custom 8-Class Railway Sabotage Detector ONNX Export
 │

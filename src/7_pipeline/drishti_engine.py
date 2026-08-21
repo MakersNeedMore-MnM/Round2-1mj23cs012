@@ -77,7 +77,7 @@ class DrishtiEngine:
 
     def __init__(
         self,
-        seg_model_path: str = "models/RailDrishti_Seg_Universal.pth",
+        seg_model_path: str = "models/RailDrishti_Seg_BiSeNetV2.pth",
         det_model_path: str = "models/RailDrishti_Det_YOLO11m.pt",
         base_det_model_path: str = "yolo11m.pt",
         conf_thresh: float = 0.35,
