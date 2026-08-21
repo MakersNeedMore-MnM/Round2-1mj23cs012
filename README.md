@@ -103,8 +103,6 @@ The **Spatial Hazard Analyzer** translates 2D object detections and segmented tr
 ```
 drishti-kavach/
 │
-├── configs/                                 # System & taxonomy specifications
-│
 ├── models/                                  # Trained weights & production ONNX models
 │   ├── RailDrishti_Seg_BiSeNetV2.pth        # Universal Dual Track Segmenter Checkpoint (86.02% mIoU)
 │   ├── RailDrishti_Det_YOLO11m.pt           # Custom 8-Class Railway Sabotage Detector (60.8% mAP50)

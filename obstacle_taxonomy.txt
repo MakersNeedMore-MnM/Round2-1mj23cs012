@@ -1,36 +1,62 @@
 ====================================================================================================
-                        DRISHTI-KAVACH: UNIFIED OBSTACLE DETECTION TAXONOMY
+                        DRISHTI-KAVACH: UNIFIED DUAL-LAYER OBSTACLE DETECTION TAXONOMY
 ====================================================================================================
 System: Indian Railways Optical Automatic Train Protection (ATP) & Visual Kavach
-Detector Model: YOLO11m (2D Bounding Box Object Detection with Active 850nm NIR Night Vision)
+Architecture: Decoupled Dual-Engine (BiSeNetV2 Track Segmenter + Dual-Layer YOLO11m Obstacle Detector)
+Weights: models/RailDrishti_Seg_BiSeNetV2.pth & models/RailDrishti_Det_YOLO11m.pt (+ yolo11m.pt baseline)
 ====================================================================================================
 
-CLASS ID | CLASS NAME     | DATASET SOURCE                     | HAZARD CATEGORY & OPERATIONAL DESCRIPTION
----------+----------------+------------------------------------+------------------------------------------------------------
-   0     | Person         | RailSem19 & UAV-RSOD V2            | Trespassers, pedestrians, track workers, station commuters
-   1     | Car            | RailSem19 (Label 13: car)          | Road vehicles stalled at level crossings or trespassing
-   2     | Truck          | RailSem19 (Label 14: truck/bus)    | Heavy trucks, buses, tractors, construction vehicles at LC
-   3     | Branch         | UAV-RSOD V2 (Class: Branch)        | Fallen tree branches, monsoon storm debris, foliage blocks
-   4     | IronRod        | UAV-RSOD V2 (Class: IronRod)       | Deliberate track sabotage: steel girders, iron rods, rails
-   5     | Boulder        | UAV-RSOD V2 (Class: Boulder)       | Landslides, rockfalls, deliberate concrete ballast boulders
-   6     | Barrel         | UAV-RSOD V2 (Class: Barrel)        | Industrial oil drums, chemical barrels placed on track
-   7     | Jerrycan       | UAV-RSOD V2 (Class: Jerrycan)      | Flammable fuel cans, accelerants, sabotage canisters
+----------------------------------------------------------------------------------------------------
+LAYER 1: CUSTOM HIGH-RISK RAILWAY SABOTAGE & PHYSICAL OBSTACLES (YOLO11m Fine-Tuned)
+----------------------------------------------------------------------------------------------------
+CLASS ID | CLASS NAME     | BENCHMARK mAP50 | HAZARD CATEGORY & OPERATIONAL DESCRIPTION
+---------+----------------+-----------------+-------------------------------------------------------
+   0     | Person         |      46.7%      | Trespassers, pedestrians, track workers, station commuters
+   1     | Car            |      48.4%      | Road vehicles stalled at level crossings or trespassing
+   2     | Truck          |      10.5%      | Heavy trucks, buses, tractors, construction vehicles at LC
+   3     | Branch         |      66.6%      | Fallen tree branches, storm debris, foliage on tracks
+   4     | IronRod        |      90.9%      | Deliberate sabotage: steel girders, placed rails, fishplates
+   5     | Boulder        |      67.8%      | Landslides, rockfalls, deliberate concrete/ballast boulders
+   6     | Barrel         |      78.4%      | Industrial oil drums, chemical barrels placed on track
+   7     | Jerrycan       |      77.5%      | Flammable fuel cans, accelerants, sabotage canisters
+
+----------------------------------------------------------------------------------------------------
+LAYER 2: COMPLEMENTARY BASE FOUNDATION HAZARDS (YOLO11m COCO Baseline)
+----------------------------------------------------------------------------------------------------
+COCO ID  | CLASS NAME     | CATEGORY        | OPERATIONAL DESCRIPTION
+---------+----------------+-----------------+-------------------------------------------------------
+  19     | Cow            | Livestock       | Cattle/livestock grazing or crossing tracks (Major Indian hazard)
+  20     | Elephant       | Wildlife        | Elephant herds in forest railway corridors (Eco-Kavach)
+  17     | Horse          | Livestock       | Domestic horses, pack animals on tracks
+  16     | Dog            | Stray Animal    | Stray dogs on ballast
+  15     | Cat            | Animal          | Small domestic animals
+  18     | Sheep          | Livestock       | Sheep/goat herds crossing railway lines
+  21     | Bear           | Wildlife        | Wildlife in mountainous/forest sectors
+  22     | Zebra          | Wildlife        | Sanctuary/safari sector wildlife
+  23     | Giraffe        | Wildlife        | Sanctuary corridor wildlife
+   5     | Bus            | Vehicle         | Passenger buses at level crossings
+   3     | Motorcycle     | Two-Wheeler     | Motorcycles/scooters crossing railway tracks
+   1     | Bicycle        | Two-Wheeler     | Cyclists on tracks or level crossings
+  28     | Suitcase       | Baggage         | Unattended luggage or dropped baggage on track
+  24     | Backpack       | Baggage         | Dropped backpacks/bags on track bed
+  26     | Handbag        | Baggage         | Dropped bags near platform tracks
+  25     | Umbrella       | Debris          | Passenger umbrellas blown onto track
+  13     | Bench          | Structure       | Platform benches vandalized/shifted into gauge
 
 ====================================================================================================
-CRITICAL RULES & EXCLUSIONS:
+CRITICAL RULES, EXCLUSIONS & CLEARANCE REASONING:
 ====================================================================================================
 1. TRAIN / ON-RAILS EXCLUSION:
-   - RailSem19 Label 16 ('on-rails' - trains, locomotives, wagons, trams) is STRICTLY EXCLUDED.
-   - The detector will NEVER generate a bounding box on a train itself, preventing false alarms
-     from oncoming trains on parallel tracks or yard wagons.
+   - Trains, locomotives, wagons, and trams ('on-rails') are STRICTLY EXCLUDED.
+   - Prevents false alarms from oncoming trains on adjacent lines, parallel yard tracks, or own locomotive.
 
-2. SENSOR & DAY/NIGHT AUGMENTATION:
-   - 50% Daylight RGB + 50% Synthetic 850nm Active Infrared (NIR) pairs generated for every image.
-   - Ensures robust detection under locomotive headlight beams, fog dehazing, and pitch-dark night.
+2. SENSOR & ILLUMINATION MODES:
+   - 50% Daylight RGB + 50% Synthetic Active 850nm Near-Infrared (NIR) Night Vision.
+   - Multi-mode adaptive atmospheric defogging (CLAHE, Dark Channel Prior, Fog Score).
 
-3. THREE-TIER ATP HAZARD REASONING:
-   - Detected Bounding Box Bottom Ground Footprint (F_k) is projected onto BiSeNetV2 Track Mask:
-     * CRITICAL (In-Track): Footprint touches running rails / track gauge -> Kavach Emergency Brake
-     * WARNING (Near-Track): Footprint inside warning buffer envelope -> Loco Pilot HUD Alert
-     * SAFE (Off-Track): Footprint on adjacent platform/slope -> Logged as safe (No Alarm)
+3. THREE-TIER SPATIAL CLEARANCE REASONING (ATP INTERVENTION):
+   - Ground Footprint polygon of each detected object is projected onto the BiSeNetV2 track mask:
+     * 🔴 CRITICAL (In-Track):   Footprint touches drivable ballast / running rails -> Emergency Brake!
+     * 🟡 WARNING (Near-Track): Footprint within lateral clearance envelope (<= 65px) -> Driver HUD Alert.
+     * 🟢 CLEAR (Off-Track):    Footprint outside railway corridor (platform/roadway) -> Track Safe.
 ====================================================================================================
