@@ -1,0 +1,243 @@
+# ==============================================================================
+# 🛡️ DRISHTI-KAVACH: DUAL-LAYER OBSTACLE & THREAT TAXONOMY SPECIFICATION
+# ==============================================================================
+# Defines the multi-tiered perception and threat classification taxonomy for
+# the Indian Railways Optical Kavach Automatic Train Protection (ATP) system.
+# ==============================================================================
+
+version: "2.0.0"
+pipeline_type: "Dual-Layer Ensemble Perception & Vector Clearance Engine"
+
+# ------------------------------------------------------------------------------
+# LAYER 1: CUSTOM HIGH-RISK RAILWAY SABOTAGE & PHYSICAL OBSTACLES
+# Engine: YOLO11m Fine-Tuned on RailDrishti Multimodal Day/Night Dataset
+# Weights: models/RailDrishti_Det_YOLO11m.pt
+# ------------------------------------------------------------------------------
+layer_1_custom_railway_threats:
+  description: "Specialized railway-specific micro-sabotage and high-impact physical obstructions"
+  classes:
+    - id: 0
+      name: "Person"
+      category: "Human"
+      risk_level: "High"
+      description: "Pedestrians, trespassers, track gang maintenance workers"
+      typical_action: "Audio-visual horn trigger; emergency brake if in gauge"
+
+    - id: 1
+      name: "Car"
+      category: "Motor Vehicle"
+      risk_level: "Critical"
+      description: "Passenger cars and light vehicles stalled at level crossings"
+      typical_action: "Immediate automatic emergency brake assertion"
+
+    - id: 2
+      name: "Truck"
+      category: "Heavy Vehicle"
+      risk_level: "Critical"
+      description: "Commercial trucks, dumpers, tractors, heavy machinery"
+      typical_action: "Immediate automatic emergency brake assertion"
+
+    - id: 3
+      name: "Branch"
+      category: "Natural Debris"
+      risk_level: "High"
+      description: "Fallen tree limbs, storm washouts, foliage on ballast"
+      typical_action: "Service brake intervention; caution order alert"
+
+    - id: 4
+      name: "IronRod"
+      category: "Sabotage Item"
+      risk_level: "Critical"
+      benchmark_map50: "90.9%"
+      description: "Deliberately placed rails, steel rods, sleeper plates, fishplates"
+      typical_action: "Immediate emergency brake assertion (Anti-Derailment)"
+
+    - id: 5
+      name: "Boulder"
+      category: "Geological Hazard"
+      risk_level: "Critical"
+      benchmark_map50: "67.8%"
+      description: "Landslide rockfalls, large ballast stones, boulder debris"
+      typical_action: "Immediate emergency brake assertion"
+
+    - id: 6
+      name: "Barrel"
+      category: "Track Obstruction"
+      risk_level: "High"
+      benchmark_map50: "78.4%"
+      description: "Metal drums, plastic chemical containers placed on track"
+      typical_action: "Service/Emergency brake based on clearance envelope"
+
+    - id: 7
+      name: "Jerrycan"
+      category: "Flammable Hazard"
+      risk_level: "High"
+      benchmark_map50: "77.5%"
+      description: "Fuel canisters, hazardous chemical drums on track bed"
+      typical_action: "Emergency brake assertion; fire hazard alert"
+
+# ------------------------------------------------------------------------------
+# LAYER 2: COMPLEMENTARY BASE FOUNDATION GENERAL DETECTOR
+# Engine: YOLO11m Foundation Pretrained (COCO Baseline)
+# Weights: yolo11m.pt
+# ------------------------------------------------------------------------------
+layer_2_complementary_foundation:
+  description: "Detects wildlife, livestock, extra transport, and unattended baggage missed in custom set"
+  enabled_classes:
+    # Animals & Wildlife (Crucial Indian Railway Corridor Threats)
+    - id: 19
+      coco_id: 19
+      name: "Cow"
+      category: "Livestock"
+      risk_level: "Critical"
+      description: "Cattle and livestock grazing or crossing active tracks"
+
+    - id: 20
+      coco_id: 20
+      name: "Elephant"
+      category: "Protected Wildlife"
+      risk_level: "Critical"
+      description: "Elephants in forest railway corridors (Eco-Kavach Protection)"
+
+    - id: 17
+      coco_id: 17
+      name: "Horse"
+      category: "Livestock"
+      risk_level: "Critical"
+      description: "Domestic horses, pack animals on tracks"
+
+    - id: 16
+      coco_id: 16
+      name: "Dog"
+      category: "Animal"
+      risk_level: "Medium"
+      description: "Stray dogs crossing ballast"
+
+    - id: 15
+      coco_id: 15
+      name: "Cat"
+      category: "Animal"
+      risk_level: "Low"
+      description: "Small domestic animals"
+
+    - id: 18
+      coco_id: 18
+      name: "Sheep"
+      category: "Livestock"
+      risk_level: "High"
+      description: "Sheep and goat herds on railway track"
+
+    - id: 21
+      coco_id: 21
+      name: "Bear"
+      category: "Wildlife"
+      risk_level: "High"
+      description: "Wildlife in mountainous railway sectors"
+
+    - id: 22
+      coco_id: 22
+      name: "Zebra"
+      category: "Wildlife"
+      risk_level: "High"
+      description: "Safari / sanctuary railway corridor animals"
+
+    - id: 23
+      coco_id: 23
+      name: "Giraffe"
+      category: "Wildlife"
+      risk_level: "High"
+      description: "Sanctuary corridor wildlife"
+
+    # Additional Transport & Vehicles
+    - id: 5
+      coco_id: 5
+      name: "Bus"
+      category: "Heavy Vehicle"
+      risk_level: "Critical"
+      description: "Passenger buses stalled at unmanned level crossings"
+
+    - id: 3
+      coco_id: 3
+      name: "Motorcycle"
+      category: "Two-Wheeler"
+      risk_level: "Critical"
+      description: "Motorcycles and scooters crossing tracks"
+
+    - id: 1
+      coco_id: 1
+      name: "Bicycle"
+      category: "Two-Wheeler"
+      risk_level: "High"
+      description: "Cyclists on railway footpaths or crossing tracks"
+
+    # Track Debris, Structures & Baggage
+    - id: 28
+      coco_id: 28
+      name: "Suitcase"
+      category: "Suspicious Baggage"
+      risk_level: "High"
+      description: "Unattended baggage or dropped luggage on track"
+
+    - id: 24
+      coco_id: 24
+      name: "Backpack"
+      category: "Baggage"
+      risk_level: "Medium"
+      description: "Dropped bags and backpacks on track bed"
+
+    - id: 26
+      coco_id: 26
+      name: "Handbag"
+      category: "Baggage"
+      risk_level: "Low"
+      description: "Dropped bags near platform tracks"
+
+    - id: 25
+      coco_id: 25
+      name: "Umbrella"
+      category: "Debris"
+      risk_level: "Low"
+      description: "Windblown passenger umbrellas on rails"
+
+    - id: 13
+      coco_id: 13
+      name: "Bench"
+      category: "Structure"
+      risk_level: "High"
+      description: "Platform benches vandalized or shifted onto track gauge"
+
+# ------------------------------------------------------------------------------
+# STRATEGIC EXCLUSIONS POLICY (FALSE-POSITIVE SUPPRESSION)
+# ------------------------------------------------------------------------------
+strategic_exclusions:
+  - coco_id: 6
+    name: "Train"
+    reason: "Strictly excluded to prevent false alarms on oncoming trains, parallel tracks, sidings, and own locomotive frame"
+  - coco_id: 4
+    name: "Airplane"
+    reason: "Overhead airspace non-hazard"
+  - coco_id: 8
+    name: "Boat"
+    reason: "Non-railway domain"
+
+# ------------------------------------------------------------------------------
+# THREE-TIER SPATIAL CLEARANCE REASONING SPECIFICATION (ATP LOGIC)
+# ------------------------------------------------------------------------------
+spatial_threat_tiers:
+  critical:
+    color_bgr: [0, 0, 255] # Red
+    condition: "Obstacle ground footprint polygon directly intersects with segmented Track Bed or Rail Lines"
+    system_action: "Trigger CAB AUDIO-VISUAL ALARM + Assert EMERGENCY BRAKE command"
+    hud_display: "CRITICAL: IN-TRACK OBSTACLE DETECTED"
+
+  warning:
+    color_bgr: [0, 200, 255] # Amber / Yellow
+    condition: "Obstacle is outside track gauge but within lateral clearance buffer (<= 65px lateral envelope)"
+    system_action: "Display visual HUD envelope warning + Alert Loco Pilot for vigilance"
+    hud_display: "WARNING: NEAR-TRACK HAZARD DETECTED"
+
+  clear:
+    color_bgr: [0, 255, 0] # Green
+    condition: "Obstacle is completely outside the track bed and lateral warning buffer (e.g. platform, roadside)"
+    system_action: "No brake intervention; track is CLEAR"
+    hud_display: "TRACK CLEAR"
