@@ -53,7 +53,8 @@ def train_yolo11m_local(
     print(f" • Total Epochs:       {epochs}")
     print("=" * 75)
 
-    model = YOLO("yolo11m.pt")
+    base_weights = "models/yolo11m.pt" if Path("models/yolo11m.pt").exists() else "yolo11m.pt"
+    model = YOLO(base_weights)
 
     results = model.train(
         data=str(yaml_path),

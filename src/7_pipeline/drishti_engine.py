@@ -79,7 +79,7 @@ class DrishtiEngine:
         self,
         seg_model_path: str = "models/RailDrishti_Seg_BiSeNetV2.pth",
         det_model_path: str = "models/RailDrishti_Det_YOLO11m.pt",
-        base_det_model_path: str = "yolo11m.pt",
+        base_det_model_path: str = "models/yolo11m.pt",
         conf_thresh: float = 0.35,
         imgsz: int = 1024,
         device: Optional[str] = None,
@@ -146,8 +146,8 @@ class DrishtiEngine:
             self.custom_det = YOLO(self.det_model_path)
             print(f"[+] Loaded Custom Railway Detector from: {self.det_model_path}")
         else:
-            print(f"[*] Custom weights '{self.det_model_path}' not found yet. Using 'yolo11m.pt'.")
-            self.custom_det = YOLO("yolo11m.pt")
+            print(f"[*] Custom weights '{self.det_model_path}' not found yet. Using '{self.base_det_model_path}'.")
+            self.custom_det = YOLO(self.base_det_model_path)
 
         self.custom_names = OBSTACLE_CLASSES
 
