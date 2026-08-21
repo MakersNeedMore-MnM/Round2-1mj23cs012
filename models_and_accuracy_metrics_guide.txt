@@ -11,9 +11,10 @@ SECTION 1: DETAILED ARCHITECTURAL INNER WORKINGS OF EACH MODEL
 
 1.1 MODEL 1: UNIVERSAL BISENETV2 (SEMANTIC TRACK & RAIL LINE SEGMENTATION)
 ----------------------------------------------------------------------------------------------------
-File: models/RailDrishti_Seg_BiSeNetV2.pth (17.3 MB, ~3.49 Million Trainable Parameters)
-Input Tensor: [Batch, 3, 512, 1024] (Normalized RGB / Active 850nm NIR)
-Output Tensor: [Batch, 3, 512, 1024] (Class 0: Background, Class 1: Track Bed, Class 2: Rail Lines)
+PyTorch Weights: models/RailDrishti_Seg_BiSeNetV2.pth (17.3 MB, ~3.49 Million Trainable Parameters)
+Production ONNX: models/RailDrishti_Seg_BiSeNetV2.onnx (13.3 MB, Constant-Folded & Slimmed via onnxslim)
+Input Tensor:    [Batch, 3, 512, 1024] (Normalized RGB / Active 850nm NIR)
+Output Tensor:   [Batch, 3, 512, 1024] (Class 0: Background, Class 1: Track Bed, Class 2: Rail Lines)
 
 • Why BiSeNetV2 (Bilateral Segmentation Network V2)?
   Standard semantic segmentation architectures (e.g., DeepLabV3+, HRNet) are too heavy for 60+ FPS
@@ -44,8 +45,10 @@ Output Tensor: [Batch, 3, 512, 1024] (Class 0: Background, Class 1: Track Bed, C
 
 1.2 MODEL 2: DUAL-LAYER OBSTACLE & SABOTAGE DETECTION SUITE (YOLO11m)
 ----------------------------------------------------------------------------------------------------
-Files: models/RailDrishti_Det_YOLO11m.pt (40.5 MB) & models/yolo11m.pt (40.7 MB)
-Input Tensor: [Batch, 3, 1024, 1024]
+Custom Weights:  models/RailDrishti_Det_YOLO11m.pt (40.5 MB)
+Production ONNX: models/RailDrishti_Det_YOLO11m.onnx (80.8 MB, Slimmed via onnxslim)
+Base Foundation: models/yolo11m.pt (40.7 MB)
+Input Tensor:    [Batch, 3, 1024, 1024]
 Target Resolution: 1024x1024 (Crucial for detecting distant micro-sabotage like thin iron rods at >150 meters)
 
 • How YOLO11m Works:
