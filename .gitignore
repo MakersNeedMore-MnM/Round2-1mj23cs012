@@ -38,6 +38,7 @@ models/
 
 # Output Images, Recordings, Snapshots, and Verification Previews
 outputs/
+camera_captures/
 previews/
 test_images/
 test_images_night/
