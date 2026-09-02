@@ -66,7 +66,7 @@ Unlike monolithic multi-task networks that compromise between small-object local
 
 #### ⚠️ Physical Obstacle Detection Taxonomy (8 Classes)
 | Class ID | Class Name | Target Description | Risk Level |
-| :---: | :--- | :--- | :---: |
+| :---: | :--- | :--- | :--- |
 | **0** | `Person` | Pedestrians, trespassers, track gang maintenance workers | High |
 | **1** | `Car` | Passenger motor vehicles stalled at level crossings | Critical |
 | **2** | `Truck` | Commercial trucks, buses, tractors, heavy machinery | Critical |
@@ -103,11 +103,25 @@ The **Spatial Hazard Analyzer** translates 2D object detections and segmented tr
 ```
 drishti-kavach/
 │
-├── models/                                  # Trained weights & production ONNX models
+├── docs/                                    # Technical guides, taxonomies & benchmark protocols
+│   ├── models_accuracy_metrics_guide.txt    # Deep learning architectures & accuracy metrics guide
+│   └── obstacle_taxonomy.txt                # Unified dual-layer obstacle & sabotage taxonomy
+│
+├── models/                                  # Trained checkpoints & production ONNX models
 │   ├── RailDrishti_Seg_BiSeNetV2.pth        # Universal Dual Track Segmenter Checkpoint (86.02% mIoU)
 │   ├── RailDrishti_Seg_BiSeNetV2.onnx       # Universal Dual Track Segmenter ONNX Export (13.3 MB)
 │   ├── RailDrishti_Det_YOLO11m.pt           # Custom 8-Class Railway Sabotage Detector (60.8% mAP50)
-│   └── RailDrishti_Det_YOLO11m.onnx         # Custom 8-Class Railway Sabotage Detector ONNX Export
+│   ├── RailDrishti_Det_YOLO11m.onnx         # Custom 8-Class Railway Sabotage Detector ONNX Export
+│   └── yolo11m.pt                           # Base Foundation YOLO11m Model
+│
+├── research_paper/                          # IEEE publication manuscript, figures & literature
+│   ├── figures/                             # High-resolution architectural figures & HUD captures
+│   ├── literature_papers/                   # Foundational reference papers & state-of-the-art literature
+│   ├── IEEE_RESEARCH_PAPER.md               # Markdown version of full IEEE research paper
+│   ├── IEEE_RESEARCH_PAPER.pdf              # Compiled IEEE research paper PDF
+│   ├── IEEEtran.cls                         # Official IEEE LaTeX document class
+│   ├── main.tex                             # LaTeX manuscript source code
+│   └── main.pdf                             # Typeset publication-ready manuscript PDF
 │
 ├── src/                                     # Core source code modules
 │   │
@@ -141,10 +155,64 @@ drishti-kavach/
 │       ├── drishti_engine.py                # Decoupled Dual-Engine master pipeline
 │       └── weather_enhancer.py              # Atmospheric defogger & CLAHE optimizer
 │
-├── camera_tester.py                         # Live UVC/USB video device diagnostics tool
-├── run_inference.py                         # Complete CLI real-time inference engine
-├── obstacle_taxonomy.txt                    # Formal 8-class obstacle taxonomy document
-└── requirements.txt                         # Dependency manifest
+├── test_samples/                            # Evaluation & verification test samples
+│   ├── sample_images/                       # Daylight railway test frames
+│   ├── sample_images_night/                 # Active 850nm NIR night vision test frames
+│   └── sample_videos/                       # Full-motion locomotive video feed
+│
+├── accuracy_metrics_test.py                 # Comprehensive accuracy & benchmark test suite
+├── camera_tester.py                         # Cross-platform live camera stream & snapshot tool
+├── FULL_DOCUMENTATION.md                    # Exhaustive 10-phase engineering & architecture documentation
+├── README.md                                # Project overview & quick start guide
+├── requirements.txt                         # Python dependencies manifest
+└── run_inference.py                         # Real-time CLI & GUI inference engine
+```
+
+---
+
+## ⚡ Quick Start & Usage
+
+### 1. Installation
+```bash
+# Clone the repository
+git clone https://github.com/alvinxsonny/drishti-kavach.git
+cd drishti-kavach
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+### 2. Real-Time Inference
+```bash
+# Run inference on live camera feed (Device 0)
+python run_inference.py --source 0
+
+# Run inference on a sample image and save results
+python run_inference.py --source test_samples/sample_images/1.jpg --save
+
+# Run inference with Active 850nm NIR Night Vision sensor preset
+python run_inference.py --source test_samples/sample_images_night/1.jpg --sensor "850nm ACTIVE IR CCTV" --save
+
+# Run on a video file in headless mode
+python run_inference.py --source test_samples/sample_videos/test.mp4 --no-view --save
+```
+
+### 3. Model Accuracy & Benchmark Suite
+```bash
+# Fast evaluation benchmark
+python accuracy_metrics_test.py
+
+# Benchmark with custom sample count
+python accuracy_metrics_test.py --samples 100
+
+# Full comprehensive evaluation across all test sets
+python accuracy_metrics_test.py --full
+```
+
+### 4. Camera Diagnostics Tool
+```bash
+# Probe connected cameras and launch zero-latency preview
+python camera_tester.py
 ```
 
 ---
@@ -158,3 +226,11 @@ drishti-kavach/
 | **Overall Segmentation** | BiSeNetV2 (Universal) | 512x1024 | ~3.49M | Mean IoU (mIoU) | **>85.5%** |
 | **Obstacle Detection** | YOLO11m | 1024x1024 | ~20.1M | mAP@50 | **>91.0%** |
 | **Inference Latency** | Decoupled Pipeline | Combined | Total Engine | End-to-End Speed | **>45 FPS (Edge)** |
+
+---
+
+## 📖 Extended Documentation
+* For exhaustive technical details, data preparation steps, model training logs, mathematical formulations, and engineering architecture, refer to [FULL_DOCUMENTATION.md](file:///Users/alvinsonny/Desktop/drishti-kavach/FULL_DOCUMENTATION.md).
+* For detailed guidance on model weights, metrics calculations, and loss formulas, see [docs/models_accuracy_metrics_guide.txt](file:///Users/alvinsonny/Desktop/drishti-kavach/docs/models_accuracy_metrics_guide.txt).
+* For the complete 8-class obstacle and 19-class complementary foundation taxonomy, see [docs/obstacle_taxonomy.txt](file:///Users/alvinsonny/Desktop/drishti-kavach/docs/obstacle_taxonomy.txt).
+* For the academic publication manuscript and LaTeX source, see [research_paper/](file:///Users/alvinsonny/Desktop/drishti-kavach/research_paper/).

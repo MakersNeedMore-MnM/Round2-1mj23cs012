@@ -1,3 +1,7 @@
+# ==============================================================================
+# Drishti-Kavach (.gitignore)
+# ==============================================================================
+
 # Python Virtual Environment & Bytecode Cache
 .venv/
 env/
@@ -11,13 +15,19 @@ __pycache__/
 dist/
 build/
 
-# Operating System Files
+# Operating System & IDE Files
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Large Datasets & Raw Archives (Ignored from Git)
+# Datasets, Raw Archives, Test Samples & Video Media
 dataset_*/
-processed_data/
+test_samples/
+test_images/
+test_images_night/
 *.zip
 *.tar
 *.tar.gz
@@ -27,7 +37,7 @@ processed_data/
 *.mov
 *.mkv
 
-# Model Checkpoints, Pretrained Weights, and Training Runs
+# Model Checkpoints, Pretrained Weights & Training Artifacts
 runs/
 models/
 *.pt
@@ -36,20 +46,13 @@ models/
 *.engine
 *.tflite
 
-# Output Images, Recordings, Snapshots, and Verification Previews
+# Output Images, Snapshots, Previews & Telemetry Logs
 outputs/
 camera_captures/
 previews/
-test_images/
-test_images_night/
-
-# Logs and Runtime Diagnostics
 *.log
-running_log.txt
 
-# Research Paper Directory & LaTeX Artifacts
-[#] paper/
-paper/
+# LaTeX Intermediate Build Artifacts
 *.aux
 *.out
 *.toc
@@ -59,9 +62,3 @@ paper/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
-
-# IDE & Editor Configurations
-.vscode/
-.idea/
-*.swp
-*.swo
