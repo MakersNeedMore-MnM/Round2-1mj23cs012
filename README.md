@@ -165,7 +165,7 @@ drishti-kavach/
 ├── FULL_DOCUMENTATION.md                    # Exhaustive 10-phase engineering & architecture documentation
 ├── README.md                                # Project overview & quick start guide
 ├── requirements.txt                         # Python dependencies manifest
-└── run_inference.py                         # Real-time CLI & GUI inference engine
+└── main.py                                  # Primary real-time CLI & GUI inference engine
 ```
 
 ---
@@ -185,16 +185,16 @@ pip install -r requirements.txt
 ### 2. Real-Time Inference
 ```bash
 # Run inference on live camera feed (Device 0)
-python run_inference.py --source 0
+python main.py --source 0
 
 # Run inference on a sample image and save results
-python run_inference.py --source test_samples/sample_images/1.jpg --save
+python main.py --source test_samples/sample_images/1.jpg --save
 
 # Run inference with Active 850nm NIR Night Vision sensor preset
-python run_inference.py --source test_samples/sample_images_night/1.jpg --sensor "850nm ACTIVE IR CCTV" --save
+python main.py --source test_samples/sample_images_night/1.jpg --sensor "850nm ACTIVE IR CCTV" --save
 
 # Run on a video file in headless mode
-python run_inference.py --source test_samples/sample_videos/test.mp4 --no-view --save
+python main.py --source test_samples/sample_videos/test.mp4 --no-view --save
 ```
 
 ### 3. Model Accuracy & Benchmark Suite

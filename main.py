@@ -21,13 +21,13 @@ Interactive Keyboard Controls (in GUI Window):
 
 Examples:
   # 1. Live USB Camera:
-  python run_inference.py --source 0
+  python main.py --source 0
 
   # 2. Process a Test Image:
-  python run_inference.py --source dataset_segmentation/images/val/rs06769_day.jpg --save
+  python main.py --source test_samples/sample_images/1.jpg --save
 
   # 3. Process Video with Active IR Night Vision:
-  python run_inference.py --source test_rail.mp4 --sensor "850nm ACTIVE IR CCTV"
+  python main.py --source test_samples/sample_videos/test.mp4 --sensor "850nm ACTIVE IR CCTV"
 """
 
 import os
