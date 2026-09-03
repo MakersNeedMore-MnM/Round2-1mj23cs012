@@ -138,45 +138,6 @@ drishti-kavach/
 └── main.py                           # Master CLI & GUI inference entry point
 ```
 
----
-
-## ⚡ Quick Start Guide
-
-### 1. Clone & Install Dependencies
-```bash
-git clone https://github.com/alvinxsonny/drishti-kavach.git
-cd drishti-kavach
-pip install -r requirements.txt
-```
-
-### 2. Run Real-Time Inference
-```bash
-# 1. Run inference on a sample image (Daylight)
-python main.py --source test_samples/sample_images/1.jpg --save
-
-# 2. Run with Active 850nm Near-Infrared (NIR) Night Vision preset
-python main.py --source test_samples/sample_images_night/1.jpg --sensor "850nm ACTIVE IR CCTV" --save
-
-# 3. Run on a video file
-python main.py --source test_samples/sample_videos/test.mp4 --save
-
-# 4. Run on a live connected camera feed (Device 0)
-python main.py --source 0
-```
-
-### 3. Run Model Benchmark Suite
-```bash
-python accuracy_metrics_test.py
-```
-
-### 4. Hardware Camera Setup & Testing
-```bash
-# Arducam Day/Night 1080p sensor calibration & focus tuning
-python arducam_tester.py
-```
-
----
-
 ## 🛠️ Technology Stack
 
 - **Deep Learning Frameworks:** PyTorch, Torchvision, Ultralytics YOLO11, ONNX Runtime
@@ -188,4 +149,5 @@ python arducam_tester.py
 
 ## 👥 Authors & Team
 
-Developed with ❤️ for **Morrow 1.0 Hackathon**.
+**Developed by Team Git Commit**  
+*From India, For India* 🇮🇳
