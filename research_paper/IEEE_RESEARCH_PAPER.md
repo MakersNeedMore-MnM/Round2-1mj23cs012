@@ -115,17 +115,52 @@ $$\text{Frame}_{\text{NIR}}(x,y) = \text{clip}\left( \left(\frac{\text{Mono}(x,y
 
 ---
 
-### B. Atmospheric Optical Enhancer (`weather_enhancer.py`)
-The optical enhancement module monitors atmospheric transmission in real time. It computes an Airlight Fog Density Score $S_{\text{fog}} \in [0, 1]$ combining luminance standard deviation $\sigma_{\text{gray}}$ and dark channel intensity $\mu_{\text{dark}}$:
+### B. Atmospheric Optical Enhancer & Weather Processing (`weather_enhancer.py`)
+Corridors across the Indian Railways network frequently encounter severe visual degradation from dense winter radiation fog, torrential monsoon rain, and low-contrast twilight lighting. Under these conditions, contrast loss causes thin steel rails and physical obstacles to dissolve into background haze. Drishti-Kavach implements an adaptive atmospheric enhancement pipeline composed of four specialized stages:
 
-$$S_{\text{contrast}} = \text{clip}\left(\frac{55.0 - \sigma_{\text{gray}}}{40.0}, 0, 1\right), \quad S_{\text{airlight}} = \text{clip}\left(\frac{\mu_{\text{dark}} - 60.0}{100.0}, 0, 1\right)$$
+#### 1. Dynamic Fog Density Scoring
+Rather than applying heavy restoration indiscriminately to every frame, the system monitors atmospheric transmission in real time. Fog density is calculated by combining scene contrast variance with dark-channel airlight accumulation:
+
+$$S_{\text{contrast}} = \text{clip}\left(\frac{55.0 - \sigma_{\text{gray}}}{40.0}, 0.0, 1.0\right)$$
+
+$$S_{\text{airlight}} = \text{clip}\left(\frac{\mu_{\text{dark}} - 60.0}{100.0}, 0.0, 1.0\right)$$
 
 $$S_{\text{fog}} = 0.60 \cdot S_{\text{airlight}} + 0.40 \cdot S_{\text{contrast}}$$
 
-* When $S_{\text{fog}} > 0.60$, the system executes **Dark Channel Prior (DCP)** inversion:
-  $$J(x) = \frac{I(x) - A}{\max(t(x), t_0)} + A$$
-* When $0.40 < S_{\text{fog}} \le 0.60$, it applies **Luminance CLAHE** in the LAB color space with clip limit $3.0$ and grid size $(8, 8)$.
-* When $S_{\text{fog}} \le 0.40$, frames pass directly to the perception models.
+where $\sigma_{\text{gray}}$ is the standard deviation of grayscale luminance representing global dynamic range, and $\mu_{\text{dark}}$ is the mean intensity of the lowest pixel values across local patches. The resulting score $S_{\text{fog}} \in [0.0, 1.0]$ gates subsequent enhancement routines.
+
+#### 2. Luminance-Domain Adaptive Contrast Enhancement (CLAHE)
+Standard RGB histogram equalization alters chromatic ratios, causing severe color distortion. When moderate haze is detected ($0.40 < S_{\text{fog}} \le 0.60$), the system converts the input frame to the CIE $L^*a^*b^*$ color space. Contrast Limited Adaptive Histogram Equalization is applied exclusively to the luminance ($L^*$) channel:
+
+$$L^*_{\text{enhanced}} = \text{CLAHE}\big(L^*, \text{clipLimit}=3.0, \text{gridSize}=(8,8)\big)$$
+
+The image is partitioned into non-overlapping $8\times8$ contextual tiles. A slope threshold of $3.0$ clips local histogram peaks to prevent sensor noise amplification in dark ballast regions. Bilinear interpolation across tile boundaries eliminates artificial block artifacts before re-projecting the tensor back to standard RGB space.
+
+#### 3. Physical Scattering Model Inversion (Dark Channel Prior Dehazing)
+Under dense fog conditions ($S_{\text{fog}} > 0.60$), the engine inverts the physical optical transmission model:
+
+$$\mathbf{I}(\mathbf{x}) = \mathbf{J}(\mathbf{x}) t(\mathbf{x}) + \mathbf{A} (1 - t(\mathbf{x}))$$
+
+where $\mathbf{I}$ is the observed foggy image, $\mathbf{J}$ is the true scene radiance, $\mathbf{A}$ is the global atmospheric light vector, and $t(\mathbf{x})$ is the medium transmission map.
+
+The dark channel $I_{\text{dark}}(\mathbf{x})$ is extracted via morphological erosion across a local window $\Omega(\mathbf{x})$ of size $15\times15$:
+
+$$I_{\text{dark}}(\mathbf{x}) = \min_{c \in \{R,G,B\}} \left( \min_{\mathbf{y} \in \Omega(\mathbf{x})} I^c(\mathbf{y}) \right)$$
+
+Atmospheric light $\mathbf{A}$ is estimated from the top $0.1\%$ brightest pixels within the dark channel. The transmission map $t(\mathbf{x})$ is computed and constrained by a lower bound $t_0 = 0.10$ to prevent division by zero in dense fog pockets:
+
+$$t(\mathbf{x}) = 1 - 0.95 \cdot \min_{c} \left( \min_{\mathbf{y} \in \Omega(\mathbf{x})} \frac{I^c(\mathbf{y})}{A^c} \right)$$
+
+The restored haze-free scene radiance $\mathbf{J}(\mathbf{x})$ is recovered analytically:
+
+$$\mathbf{J}(\mathbf{x}) = \frac{\mathbf{I}(\mathbf{x}) - \mathbf{A}}{\max(t(\mathbf{x}), t_0)} + \mathbf{A}$$
+
+#### 4. Temporal Rain-Streak Rolling Median Filter
+During heavy monsoon rainfall, fast-moving precipitation creates vertical high-frequency streaks that disrupt continuous rail ribbon detection. For continuous video streams, a 3-frame rolling temporal median filter is evaluated across the input frame buffer:
+
+$$\mathbf{F}_{\text{clean}}(x, y, t) = \text{median}\big(\mathbf{I}(x, y, t-2), \mathbf{I}(x, y, t-1), \mathbf{I}(x, y, t)\big)$$
+
+Because precipitation droplets travel at high velocity between successive frames while track structures and ballast beds remain static, the median filter cancels transient vertical streaks without degrading rail edge sharpness. When $S_{\text{fog}} \le 0.40$ and clear weather is detected, all preprocessing filters are bypassed to maintain maximum frame rates.
 
 ---
 
@@ -148,8 +183,10 @@ BiSeNetV2 handles high-speed semantic track segmentation across three canonical 
    $$\text{Output}_{\text{BGA}} = \text{Conv}_{3\times3}\left(\text{Path}_1 + \text{Path}_2\right)$$
 4. **Booster Training vs. Zero-Cost Inference:** 4 auxiliary booster heads inject intermediate supervision gradients during training. These heads are pruned prior to ONNX export, ensuring 0 FLOPs overhead at runtime (3.49M parameters, 13.3 MB binary).
 
-![BiSeNetV2 Track Bed and Rail Ribbon Segmentation](../previews/railsem19_checks/preview_seg_3_rs00018.jpg)
-*Fig. BiSeNetV2 semantic track segmentation verification on RailSem19 cab view benchmark.*
+| BiSeNetV2 Multi-Track Cab-View Prediction | High-Curvature Rail Ribbon & Ballast Delineation |
+| :---: | :---: |
+| ![BiSeNetV2 Prediction Sample 1](figures/fig_bisenet_preview_1.jpg) | ![BiSeNetV2 Prediction Sample 2](figures/fig_bisenet_preview_2.jpg) |
+*Fig. BiSeNetV2 real-time semantic track bed and running rail ribbon segmentation across multi-track corridors and curved track alignments.*
 
 ---
 
@@ -157,10 +194,7 @@ BiSeNetV2 handles high-speed semantic track segmentation across three canonical 
 Operating natively at $1024\times1024$ resolution, the detection subsystem runs two cooperating layers:
 * **Layer 1 (Custom 8-Class Railway Hazard Engine):** Fine-tuned specifically for `Person`, `Car`, `Truck`, `Branch`, `IronRod`, `Boulder`, `Barrel`, and `Jerrycan`. Trains and locomotives are excluded from hazard labels to prevent false alarms from parallel line traffic.
 * **Layer 2 (Complementary Foundation Baseline):** Incorporates 19 enabled COCO foundation classes covering livestock, wildlife (`Cow`, `Elephant`, `Horse`, `Dog`, `Cat`, `Sheep`, `Bear`, `Zebra`, `Giraffe`), secondary road vehicles (`Bus`, `Motorcycle`, `Bicycle`), and unattended luggage (`Suitcase`, `Backpack`, `Handbag`).
-* **IoU-Based Fusion:** Merges predictions using non-maximum suppression ($\text{IoU}_{\text{thresh}} = 0.45$), where custom sabotage detections take operational precedence.
 
-![Dual-Layer YOLO11m Obstacle Detection](../previews/responsive_hud_eval/result_3.jpg)
-*Fig. Dual-layer YOLO11m obstacle detection and lateral clearance localization.*
 
 ---
 
@@ -235,17 +269,6 @@ $$\mathcal{W}_{\text{zone}} = \mathcal{T}_{\text{unified}}.\text{buffer}(\delta)
 1. **`dataset_segmentation/` (RailSem19 Cab View):** 8,500 cab-view frames remapped into 3-class canonical format (`Background`, `Track_Bed`, `Rail_Lines`) with 50/50 Day/Active NIR Night pairs.
 2. **`dataset_segmentation_uav_v1/` (UAV-RSOD Infrastructure):** High-angle drone and gantry imagery providing structural angle regularization.
 3. **`dataset_detection/` (Unified 8-Class Hazard Dataset):** Standardized YOLO bounding boxes combining UAV-RSOD V2 sabotage targets and RailSem19 crossing vehicles.
-
-| Curated Dataset Directory | Generator Script | Input Sources | Output Format | Target Model |
-| :--- | :--- | :--- | :--- | :--- |
-| `dataset_segmentation/` | `prep_railsem19_segmentation.py` | RailSem19 Raw (Cab View) | 3-Class 8-bit PNG Masks (`0, 1, 2`) + Day/NIR Pairs | `BiSeNetV2` (Cab Segmenter) |
-| `dataset_segmentation_uav_v1/` | `prep_uav_v1_segmentation.py` | UAV-RSOD V1 (Infrastructure/Aerial) | 3-Class 8-bit PNG Masks (`0, 1, 2`) + Day/NIR Pairs | `BiSeNetV2` (Universal Regularizer) |
-| `dataset_detection/` | `prep_obstacle_detection.py` | UAV-RSOD V2 + RailSem19 Vehicles | 8-Class YOLO `.txt` Bounding Boxes + Day/NIR Pairs | `YOLO11m` (Obstacle Detector) |
-
-##### Preprocessing Verification and Multi-Spectral Samples
-| Daylight Track Bed & Rails Mask (RailSem19) | Active 850nm NIR Night Vision Pair | Drone Ballast & Rail Mask (UAV-RSOD V1) |
-| :---: | :---: | :---: |
-| ![RailSem19 Preview 1](previews/railsem19_checks/preview_seg_1_rs00006.jpg) | ![RailSem19 Preview 2](previews/railsem19_checks/preview_seg_2_rs00015.jpg) | ![UAV-RSOD V1 Drone Track](previews/uav_v1_checks/preview_uav1_162.jpg) |
 
 ### B. Training Hyperparameters
 * **Universal BiSeNetV2:** Trained using AdamW ($\beta_1=0.9, \beta_2=0.999$, weight decay $1\times 10^{-4}$) with polynomial learning rate schedule (initial LR $5\times 10^{-4}$, power $0.9$) over 40 epochs on dual NVIDIA GPUs.
@@ -322,19 +345,15 @@ The end-to-end perception loop executes in under 22 ms on embedded edge hardware
 
 The following qualitative results illustrate the full end-to-end perception cycle, spatial hazard classification, and HUD telemetry:
 
-#### 1. Universal Semantic Track Segmentation (Daylight vs. Active 850nm NIR Night)
-| RailSem19 Cab View (Daylight RGB) | RailSem19 Cab View (Active 850nm NIR Night) |
+| [CLEAR] Nominal Speed Clearance | [WARNING] 65px Lateral Buffer Caution |
 | :---: | :---: |
-| ![RailSem19 Daylight Segmentation](../previews/universal_model_eval/preview_universal_03.jpg) | ![RailSem19 NIR Night Segmentation](../previews/universal_model_eval/preview_universal_05.jpg) |
+| ![Nominal Line Speed Run](figures/fig_hud_clear.jpg) | ![Caution Alert Run](figures/fig_hud_caution.jpg) |
+| *Track bed and clearance corridor confirmed safe; locomotive proceeds at authorized line speed.* | *Hazard detected within 65px dynamic safety buffer; alerts driver HUD for vigilance.* |
 
-| UAV-RSOD Drone Perspective (Daylight RGB) | UAV-RSOD Drone Perspective (Active 850nm NIR Night) |
+| [CRITICAL] Emergency Braking Trigger | Active 850nm NIR Night Vision Telemetry HUD |
 | :---: | :---: |
-| ![UAV-RSOD Daylight Segmentation](../previews/universal_model_eval/preview_universal_07.jpg) | ![UAV-RSOD NIR Night Segmentation](../previews/universal_model_eval/preview_universal_08.jpg) |
-
-#### 2. Drishti-Kavach Operational Runs (Three-Tier Threat Classification)
-| [CLEAR] All Clear Run (Off-Track Nominal Speed) | [WARNING] Caution Run (65px Lateral Buffer Advisory) | [CRITICAL] Emergency Brake Run (Obstacle on Track) |
-| :---: | :---: | :---: |
-| ![All Clear Run](../previews/responsive_hud_eval/result_7.jpg) | ![Caution Alert Run](../previews/responsive_hud_eval/result_4.jpg) | ![Emergency Brake Run](../previews/responsive_hud_eval/result_1.jpg) |
+| ![Emergency Brake Run](figures/fig_hud_crit.jpg) | ![Active NIR Night Vision Run](figures/fig_hud_ir.jpg) |
+| *In-gauge track obstruction detected; asserts instantaneous locomotive ATP emergency brake.* | *Round-the-clock clearance verification under zero-light conditions via active 850nm NIR headlamp.* |
 
 ---
 
