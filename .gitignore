@@ -52,6 +52,9 @@ camera_captures/
 previews/
 *.log
 
+# Project Prep & Working Notes
+ppt_prep.md
+
 # LaTeX Intermediate Build Artifacts
 *.aux
 *.out
@@ -62,3 +65,5 @@ previews/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+
+
