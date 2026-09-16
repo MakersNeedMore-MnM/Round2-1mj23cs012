@@ -1,5 +1,6 @@
 import os
 from contextlib import contextmanager
+from datetime import datetime
 import cv2
 
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
@@ -75,6 +76,9 @@ def main():
         print(f"Failed to open camera {cam_idx}")
         return
 
+    save_dir = os.path.join("camera_captures", "camera_tester")
+    os.makedirs(save_dir, exist_ok=True)
+
     win_name = f"Camera {cam_idx}"
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
 
@@ -84,8 +88,20 @@ def main():
             continue
 
         cv2.imshow(win_name, frame)
-        if cv2.waitKey(1) & 0xFF in (ord("q"), ord("Q"), 27):
+        key = cv2.waitKey(1) & 0xFF
+
+        if key in (ord("q"), ord("Q"), 27):
             break
+        elif key in (ord("s"), ord("S"), 32):  # 's' or SPACE
+            now = datetime.now()
+            date_str = now.strftime("%d-%m-%Y")
+            time_str = now.strftime("%H-%M-%S")
+            sub_sec = f"{now.microsecond // 10000:02d}"
+            filename = f"camera_tester_{date_str}_{time_str}_{sub_sec}.jpg"
+            filepath = os.path.join(save_dir, filename)
+            cv2.imwrite(filepath, frame)
+            print(f"Saved: {filepath}")
+
         if cv2.getWindowProperty(win_name, cv2.WND_PROP_VISIBLE) < 1:
             break
 
