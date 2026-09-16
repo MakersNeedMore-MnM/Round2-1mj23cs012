@@ -2,87 +2,262 @@
 Drishti Kavach: Real-Time Railway Physical Obstacle & Track Clearance Inference Engine
 
 CLI Flags & Usage:
-  --source STR/INT : Input source: '0' (Webcam), 'video.mp4', 'image.jpg', 'dir/', 'rtsp://...' (default: 0)
-  --seg-model STR  : Path to BiSeNetV2 segmentation model (default: models/RailDrishti_Seg_BiSeNetV2.pth)
-  --det-model STR  : Path to YOLO11m obstacle detection model (default: models/RailDrishti_Det_YOLO11m.pt)
-  --conf FLOAT     : Confidence threshold for obstacles (default: 0.35)
-  --imgsz INT      : Inference resolution for obstacles (default: 1024)
-  --weather STR    : Weather optimizer: 'auto', 'clahe', 'dcp', 'rain', 'off' (default: auto)
-  --sensor STR     : Sensor label: 'DAYLIGHT RGB' or '850nm ACTIVE IR CCTV' (default: DAYLIGHT RGB)
-  --save           : Save annotated output stream to outputs/inference_results/
+  --source STR/INT : Input source: '0' (Webcam/USB Camera), 'video.mp4', 'image.jpg', 'rtsp://...' (default: '0')
+  --conf FLOAT     : Confidence threshold for obstacle detection (default: 0.35)
+  --imgsz INT      : Inference resolution for obstacle detection (default: 1024)
+  --weather STR    : Weather defogging mode: 'off', 'auto', 'clahe', 'dcp' (default: 'off')
+  --save           : Save annotated output stream/images to outputs/inference_results/
   --no-view        : Run in headless mode without opening GUI window
 
 Interactive Keyboard Controls (in GUI Window):
+  [S] / [SPACE]    : Capture snapshot to camera_captures/main/
   [Q] / [ESC]      : Quit stream
-  [D]              : Toggle / Cycle Weather Defogging Modes (Auto -> CLAHE -> DCP -> Off)
-  [H]              : Toggle HUD Telemetry Overlay on/off
-  [S]              : Capture snapshot to outputs/snapshots/
-  [SPACE]          : Pause / Resume stream
 
 Examples:
-  # 1. Live USB Camera:
-  python main.py --source 0
+  # 1. Live USB / Arducam Camera @ 1024p:
+  python main.py
 
-  # 2. Process a Test Image:
-  python main.py --source test_samples/sample_images/1.jpg --save
+  # 2. Specific camera index with higher confidence threshold:
+  python main.py --source 0 --conf 0.40
 
-  # 3. Process Video with Active IR Night Vision:
-  python main.py --source test_samples/sample_videos/test.mp4 --sensor "850nm ACTIVE IR CCTV"
+  # 3. Process video file and save output:
+  python main.py --source test_samples/sample_videos/test.mp4 --save
+
+  # 4. Enable optional weather defogging optimizer:
+  python main.py --weather auto
 """
 
 import os
 import sys
 import time
+import threading
 import argparse
-import glob
+from datetime import datetime
 from pathlib import Path
 import cv2
-import numpy as np
 
 from src import DrishtiEngine
 
 
+class ThreadedCamera:
+    """Non-blocking asynchronous threaded video stream reader for zero I/O wait latency."""
+
+    def __init__(self, source):
+        self.is_cam = str(source).isdigit()
+        if self.is_cam:
+            self.cap = cv2.VideoCapture(int(source))
+            try:
+                self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+            except Exception:
+                pass
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            try:
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except Exception:
+                pass
+        else:
+            self.cap = cv2.VideoCapture(source)
+
+        self.grabbed, self.frame = self.cap.read()
+        self.stopped = False
+        self.lock = threading.Lock()
+
+        if self.is_cam and self.cap.isOpened():
+            self.thread = threading.Thread(target=self._update, daemon=True)
+            self.thread.start()
+
+    def _update(self):
+        while not self.stopped:
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                time.sleep(0.002)
+                continue
+            with self.lock:
+                self.grabbed = ret
+                self.frame = frame
+
+    def read(self):
+        if self.is_cam:
+            with self.lock:
+                return self.grabbed, (self.frame.copy() if self.frame is not None else None)
+        else:
+            return self.cap.read()
+
+    def release(self):
+        self.stopped = True
+        if hasattr(self, "thread") and self.thread.is_alive():
+            self.thread.join(timeout=0.4)
+        self.cap.release()
+
+    def isOpened(self):
+        return self.cap.isOpened()
+
+    def get(self, prop_id):
+        return self.cap.get(prop_id)
+
+    def set(self, prop_id, value):
+        return self.cap.set(prop_id, value)
+
+
+def normalize_status(st: str) -> str:
+    """Normalizes status strings so CLEAR and ALL CLEAR map to ALL CLEAR."""
+    s = str(st).upper().strip()
+    if s in ["CLEAR", "ALL CLEAR", "SAFE", "NOMINAL"]:
+        return "ALL CLEAR"
+    elif "CRITICAL" in s:
+        return "CRITICAL"
+    elif "WARN" in s:
+        return "WARNING"
+    return s
+
+
+def save_session_report(
+    reports_dir: str,
+    source: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    elapsed_sec: float,
+    total_frames: int,
+    conf_thresh: float,
+    imgsz: int,
+    log_entries: list,
+    detection_stats: dict,
+    status_counts: dict
+):
+    """Generates and writes a comprehensive formatted session text report."""
+    os.makedirs(reports_dir, exist_ok=True)
+    end_str = end_dt.strftime("%d-%m-%Y_%H-%M-%S")
+    report_filename = f"session_report_{end_str}.txt"
+    report_path = os.path.join(reports_dir, report_filename)
+
+    avg_fps = (total_frames / elapsed_sec) if elapsed_sec > 0 else 0.0
+
+    # Format elapsed duration
+    mins, secs = divmod(int(elapsed_sec), 60)
+    hrs, mins = divmod(mins, 60)
+    if hrs > 0:
+        duration_str = f"{hrs}h {mins}m {secs}s ({elapsed_sec:.1f} seconds)"
+    elif mins > 0:
+        duration_str = f"{mins}m {secs}s ({elapsed_sec:.1f} seconds)"
+    else:
+        duration_str = f"{elapsed_sec:.1f} seconds"
+
+    lines = [
+        "=" * 80,
+        "                 DRISHTI KAVACH — SESSION INFERENCE REPORT",
+        "=" * 80,
+        f"Session Start   : {start_dt.strftime('%d-%m-%Y %H:%M:%S')}",
+        f"Session End     : {end_dt.strftime('%d-%m-%Y %H:%M:%S')}",
+        f"Total Duration  : {duration_str}",
+        f"Input Source    : {source}",
+        f"Total Frames    : {total_frames:,} frames",
+        f"Average FPS     : {avg_fps:.1f} FPS",
+        f"Resolution      : Inference @ {imgsz}x{imgsz}",
+        f"Confidence Cut  : {conf_thresh:.2f}",
+        "=" * 80,
+        "                            CHRONOLOGICAL TRACK LOGS",
+        "=" * 80,
+    ]
+
+    if log_entries:
+        lines.extend(log_entries)
+    else:
+        lines.append("No periodic logs recorded.")
+
+    lines.extend([
+        "=" * 80,
+        "                       CONSOLIDATED DETECTIONS SUMMARY",
+        "=" * 80,
+    ])
+
+    total_instances = sum(len(confs) for confs in detection_stats.values())
+    lines.append(f"Total Obstacle Detections: {total_instances} instances across {len(detection_stats)} unique classes\n")
+
+    if detection_stats:
+        lines.append(f"{'Class Name':<20} {'Count':<10} {'Avg Conf':<12} {'Min Conf':<12} {'Max Conf':<12}")
+        lines.append("-" * 80)
+        for cname, confs in sorted(detection_stats.items(), key=lambda item: len(item[1]), reverse=True):
+            cnt = len(confs)
+            avg_c = (sum(confs) / cnt) * 100
+            min_c = min(confs) * 100
+            max_c = max(confs) * 100
+            lines.append(f"{cname:<20} {cnt:<10} {avg_c:>6.1f}%      {min_c:>6.1f}%      {max_c:>6.1f}%")
+    else:
+        lines.append("No obstacle detections recorded during this session.")
+
+    lines.extend([
+        "=" * 80,
+        "                       TRACK SAFETY STATUS BREAKDOWN",
+        "=" * 80,
+    ])
+
+    if total_frames > 0:
+        clean_counts = {"ALL CLEAR": 0, "WARNING": 0, "CRITICAL": 0}
+        for st, count in status_counts.items():
+            norm_k = normalize_status(st)
+            clean_counts[norm_k] = clean_counts.get(norm_k, 0) + count
+
+        for st_name in ["ALL CLEAR", "WARNING", "CRITICAL"]:
+            st_count = clean_counts.get(st_name, 0)
+            pct = (st_count / total_frames) * 100
+            lines.append(f"• {st_name:<16}: {st_count:>6,} frames ({pct:>5.1f}%)")
+    else:
+        lines.append("No frame statistics available.")
+
+    lines.extend([
+        "=" * 80,
+        "Report generated automatically by Drishti Kavach ATP Engine.",
+        "=" * 80,
+        ""
+    ])
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    print(f"\n[+] Full session report saved to: {report_path}")
+    return report_path
+
+
 def run_inference(
     source: str = "0",
-    seg_model_path: str = "models/RailDrishti_Seg_BiSeNetV2.pth",
-    det_model_path: str = "models/RailDrishti_Det_YOLO11m.pt",
     conf_thresh: float = 0.35,
-    imgsz: int = 1024,
-    weather_mode: str = "auto",
-    sensor_type: str = "DAYLIGHT RGB",
+    imgsz: int = 640,
+    weather_mode: str = "off",
     save_output: bool = False,
     show_view: bool = True
 ):
+    snapshot_dir = os.path.join("camera_captures", "main")
     output_dir = "outputs/inference_results"
-    snapshot_dir = "outputs/snapshots"
+    reports_dir = os.path.join("outputs", "reports")
+    os.makedirs(snapshot_dir, exist_ok=True)
+    os.makedirs(reports_dir, exist_ok=True)
     if save_output:
         os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(snapshot_dir, exist_ok=True)
 
-    # Initialize Decoupled Engine
+    # Initialize Engine (Default 1024 full resolution inference)
     engine = DrishtiEngine(
-        seg_model_path=seg_model_path,
-        det_model_path=det_model_path,
         conf_thresh=conf_thresh,
         imgsz=imgsz,
         weather_mode=weather_mode
     )
 
-    # 1. Check if source is a single image
-    is_img = False
+    # 1. Single Image Source
     valid_exts = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
     if os.path.isfile(source) and any(source.lower().endswith(ext) for ext in valid_exts):
-        is_img = True
+        start_dt = datetime.now()
+        start_t = time.time()
 
-    if is_img:
         frame = cv2.imread(source)
         if frame is None:
             print(f"[!] Error: Could not load image: {source}")
             return
 
         rendered, status, hazards, telemetry = engine.process_frame(
-            frame, sensor_type=sensor_type, show_hud=True, is_video_stream=False
+            frame, show_hud=True, is_video_stream=False
         )
+        elapsed_sec = time.time() - start_t
+        end_dt = datetime.now()
 
         print(f"\n[*] Processing Complete for: {source}")
         print(f"  • Clearance Status: {status}")
@@ -95,6 +270,29 @@ def run_inference(
             cv2.imwrite(out_path, rendered)
             print(f"[+] Saved result to: {out_path}")
 
+        # Record statistics
+        detection_stats = {}
+        for h in hazards:
+            detection_stats.setdefault(h.class_name, []).append(h.confidence)
+        status_counts = {status: 1}
+        log_entries = [
+            f"• [IMAGE RESULT] {start_dt.strftime('%d.%m.%Y | %H:%M:%S')} -> {status.upper()} | Hazards ({len(hazards)}) | {telemetry['fps']:.1f} FPS"
+        ]
+
+        save_session_report(
+            reports_dir=reports_dir,
+            source=source,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            elapsed_sec=elapsed_sec,
+            total_frames=1,
+            conf_thresh=conf_thresh,
+            imgsz=imgsz,
+            log_entries=log_entries,
+            detection_stats=detection_stats,
+            status_counts=status_counts
+        )
+
         if show_view:
             cv2.imshow("Drishti Kavach - Railway Clearance ATP", rendered)
             print("\n[Controls] Press any key in the window to exit.")
@@ -102,11 +300,8 @@ def run_inference(
             cv2.destroyAllWindows()
         return
 
-    # 2. Video Capture Stream
-    if source.isdigit():
-        cap = cv2.VideoCapture(int(source))
-    else:
-        cap = cv2.VideoCapture(source)
+    # 2. Asynchronous Threaded Camera / Video Stream
+    cap = ThreadedCamera(source)
 
     if not cap.isOpened():
         print(f"[!] Error: Could not open video source: {source}")
@@ -118,70 +313,104 @@ def run_inference(
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps_in = cap.get(cv2.CAP_PROP_FPS)
         fps_in = fps_in if fps_in > 0 else 30.0
-        
-        base_src_name = Path(source).stem if not source.isdigit() else f"stream_{int(time.time())}"
+
+        base_src_name = Path(source).stem if not str(source).isdigit() else f"stream_{int(time.time())}"
         out_video_path = os.path.join(output_dir, f"result_{base_src_name}.mp4")
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(out_video_path, fourcc, fps_in, (w, h))
         print(f"[+] Output video will be saved to: {out_video_path}")
 
-    show_hud = True
-    paused = False
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if not source.isdigit() else None
-    
-    from tqdm import tqdm
-    pbar = tqdm(total=total_frames, desc="Processing Video", unit="frame") if total_frames and total_frames > 0 else None
+    win_name = "Drishti Kavach - Railway Clearance ATP"
+    if show_view:
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
 
-    print("\n" + "=" * 75)
-    print(" 🚀 DRISHTI KAVACH REAL-TIME STREAM ACTIVE")
-    print(" • Press [Q] or [ESC] to Quit")
-    print(" • Press [D] to Cycle Weather Defogging Modes")
-    print(" • Press [H] to Toggle HUD Dashboard")
-    print(" • Press [S] to Save Snapshot")
-    print(" • Press [SPACE] to Pause / Resume")
-    print("=" * 75 + "\n")
+    print("\n" + "=" * 65)
+    print(" 🛡️  DRISHTI KAVACH REAL-TIME STREAM ACTIVE")
+    print(" • [S] / [SPACE] : Save Snapshot")
+    print(" • [Q] / [ESC]   : Quit Stream")
+    print("=" * 65 + "\n")
+
+    is_live_cam = str(source).isdigit()
+    last_report_time = 0.0
+    prev_status = None
+
+    # Session Metrics Tracking
+    session_start_dt = datetime.now()
+    session_start_t = time.time()
+    total_frames_processed = 0
+    log_entries = []
+    detection_stats = {}
+    status_counts = {"ALL CLEAR": 0, "WARNING": 0, "CRITICAL": 0}
 
     try:
         while True:
-            if not paused:
-                ret, frame = cap.read()
-                if not ret or frame is None:
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                if is_live_cam:
+                    time.sleep(0.002)
+                    continue
+                else:
+                    if not save_output:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        continue
                     print("\n[*] End of video stream reached.")
                     break
 
-                rendered, status, hazards, telemetry = engine.process_frame(
-                    frame, sensor_type=sensor_type, show_hud=show_hud, is_video_stream=True
-                )
+            rendered, status, hazards, telemetry = engine.process_frame(
+                frame, show_hud=True, is_video_stream=True
+            )
 
-                if writer is not None:
-                    writer.write(rendered)
-                    
-                if pbar is not None:
-                    pbar.update(1)
-                    pbar.set_postfix({"status": status, "hazards": len(hazards), "fps": f"{telemetry['fps']:.1f}"})
+            total_frames_processed += 1
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+            # Track detection confidence stats per class
+            for h in hazards:
+                detection_stats.setdefault(h.class_name, []).append(h.confidence)
+
+            # Periodic (2s) and Event-Driven Immediate Terminal Reporting
+            curr_time = time.time()
+            status_changed = (prev_status is not None and status != prev_status)
+            if prev_status is None or status_changed or (curr_time - last_report_time >= 2.0):
+                last_report_time = curr_time
+                prev_status = status
+
+                if hazards:
+                    hazard_list = [f"{h.class_name} ({h.confidence:.0%})" for h in hazards]
+                    hazard_str = f"Obstacles ({len(hazards)}): " + ", ".join(hazard_list)
+                else:
+                    hazard_str = "Obstacles: None"
+
+                ts_now = datetime.now().strftime("%d.%m.%Y | %H:%M:%S")
+                prefix = " ⚡ [STATUS CHANGE]" if status_changed else " • [TRACK REPORT]"
+                log_line = f"{prefix} {ts_now} -> {status.upper()} | {hazard_str} | {telemetry['fps']:.1f} FPS"
+                print(log_line)
+                log_entries.append(log_line)
+
+            if writer is not None:
+                writer.write(rendered)
 
             if show_view:
-                cv2.imshow("Drishti Kavach - Railway Clearance ATP", rendered)
+                cv2.imshow(win_name, rendered)
                 key = cv2.waitKey(1) & 0xFF
 
-                if key in [ord("q"), ord("Q"), 27]:  # ESC
+                if key in (ord("q"), ord("Q"), 27):
                     break
-                elif key in [ord("h"), ord("H")]:
-                    show_hud = not show_hud
-                elif key in [ord("s"), ord("S")]:
-                    snap_path = os.path.join(snapshot_dir, f"snap_{int(time.time())}.jpg")
+                elif key in (ord("s"), ord("S"), 32):  # 's' or SPACE
+                    now = datetime.now()
+                    date_str = now.strftime("%d-%m-%Y")
+                    time_str = now.strftime("%H-%M-%S")
+                    sub_sec = f"{now.microsecond // 10000:02d}"
+                    filename = f"main_{date_str}_{time_str}_{sub_sec}.jpg"
+                    snap_path = os.path.join(snapshot_dir, filename)
                     cv2.imwrite(snap_path, rendered)
-                    print(f"\n[+] Snapshot saved: {snap_path}")
-                elif key == 32:  # SPACE
-                    paused = not paused
-                elif key in [ord("d"), ord("D")]:
-                    modes = ["auto", "clahe", "dcp", "off"]
-                    cur_idx = modes.index(engine.weather_mode) if engine.weather_mode in modes else 0
-                    engine.weather_mode = modes[(cur_idx + 1) % len(modes)]
-                    print(f"\n[*] Switched Weather Mode to: {engine.weather_mode.upper()}")
+                    print(f"[+] Snapshot saved: {snap_path}")
+
+                if cv2.getWindowProperty(win_name, cv2.WND_PROP_VISIBLE) < 1:
+                    break
     finally:
-        if pbar is not None:
-            pbar.close()
+        session_end_dt = datetime.now()
+        session_elapsed_sec = time.time() - session_start_t
+
         cap.release()
         if writer is not None:
             writer.release()
@@ -189,29 +418,37 @@ def run_inference(
         if show_view:
             cv2.destroyAllWindows()
 
+        save_session_report(
+            reports_dir=reports_dir,
+            source=str(source),
+            start_dt=session_start_dt,
+            end_dt=session_end_dt,
+            elapsed_sec=session_elapsed_sec,
+            total_frames=total_frames_processed,
+            conf_thresh=conf_thresh,
+            imgsz=imgsz,
+            log_entries=log_entries,
+            detection_stats=detection_stats,
+            status_counts=status_counts
+        )
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Inference")
-    parser.add_argument("--source", type=str, default="0", help="Video source (camera index, path, URL)")
-    parser.add_argument("--seg-model", type=str, default="models/RailDrishti_Seg_BiSeNetV2.pth", help="BiSeNetV2 weights")
-    parser.add_argument("--det-model", type=str, default="models/RailDrishti_Det_YOLO11m.pt", help="YOLO11m weights")
-    parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold")
-    parser.add_argument("--imgsz", type=int, default=1024, help="Obstacle detection resolution")
-    parser.add_argument("--weather", type=str, default="auto", choices=["auto", "clahe", "dcp", "rain", "off"], help="Weather optimizer")
-    parser.add_argument("--sensor", type=str, default="DAYLIGHT RGB", help="Sensor label")
-    parser.add_argument("--save", action="store_true", help="Save output video/images")
-    parser.add_argument("--no-view", action="store_true", help="Headless mode without GUI")
+    parser = argparse.ArgumentParser(description="Drishti Kavach Real-Time Railway Clearance Inference")
+    parser.add_argument("--source", type=str, default="0", help="Camera index (default: '0') or video/image path")
+    parser.add_argument("--conf", type=float, default=0.35, help="Obstacle detection confidence threshold (default: 0.35)")
+    parser.add_argument("--imgsz", type=int, default=640, help="Inference resolution (default: 640)")
+    parser.add_argument("--weather", type=str, default="off", choices=["off", "auto", "clahe", "dcp"], help="Weather defogging (default: off)")
+    parser.add_argument("--save", action="store_true", help="Save annotated output stream to outputs/inference_results/")
+    parser.add_argument("--no-view", action="store_true", help="Headless mode without GUI window")
 
     args = parser.parse_args()
 
     run_inference(
         source=args.source,
-        seg_model_path=args.seg_model,
-        det_model_path=args.det_model,
         conf_thresh=args.conf,
         imgsz=args.imgsz,
         weather_mode=args.weather,
-        sensor_type=args.sensor,
         save_output=args.save,
         show_view=not args.no_view
     )

@@ -1,0 +1,76 @@
+================================================================================
+ 🛡️  DRISHTI-KAVACH: QUANTITATIVE ACCURACY & BENCHMARK SUITE
+================================================================================
+ • Generated At:       2026-08-23 18:16:41
+ • Segmentation Model: models/RailDrishti_Seg_BiSeNetV2.pth
+ • Custom Det Model:   models/RailDrishti_Det_YOLO11m.pt
+ • Base Det Model:     models/yolo11m.pt
+================================================================================
+ • Execution Device:   Apple Silicon GPU (MPS)
+
+--------------------------------------------------------------------------------
+ 🚆 PART 1: TRACK & RAIL SEMANTIC SEGMENTATION EVALUATION (BiSeNetV2)
+--------------------------------------------------------------------------------
+[+] BiSeNetV2 Architecture Loaded: 3,488,531 Trainable Parameters (~3.49M)
+
+[*] Evaluating Universal Validation Distribution (Evaluating 50 Frames)...
+
+============================================================
+ 📊 COMBINED UNIVERSAL SEGMENTATION METRICS
+============================================================
+ • Overall Mean IoU (mIoU):        84.10%
+ • Overall Pixel Accuracy (PA):    98.63%
+ • Mean Pixel Accuracy (MPA):      90.23%
+ • Mean Dice / F1 Score:           90.73%
+ • Inference Latency:              44.91 ms (22.3 FPS)
+------------------------------------------------------------
+ Per-Class Breakdown:
+   [0] Background (Non-Rail):      98.83% IoU | Recall: 99.48% | Precision: 99.34%
+   [1] Track Bed (Drivable Gauge): 87.90% IoU | Recall: 92.90% | Precision: 94.23%
+   [2] Rail Lines (Steel Rails):   65.57% IoU | Recall: 78.31% | Precision: 80.12%
+============================================================
+
+----------------------------------------------------------------------------------------
+Domain / Illumination Subset             | Frames | mIoU (%) | Track Bed (%) | Rails (%)
+----------------------------------------------------------------------------------------
+Locomotive Cab (RailSem19 All)           | 2550   |  84.10%  |       87.90%   |   65.57%
+Locomotive Cab (Daylight RGB)            | 1275   |  84.03%  |       87.73%   |   65.61%
+Locomotive Cab (Active NIR Night)        | 1275   |  83.47%  |       87.19%   |   64.55%
+Indian Infrastructure (UAV-RSOD All)     | 94     |  84.12%  |       92.91%   |   62.12%
+Indian Infrastructure (Daylight RGB)     | 47     |  84.06%  |       92.98%   |   61.78%
+Indian Infrastructure (Active NIR Night) | 47     |  83.94%  |       92.61%   |   61.95%
+----------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+ ⚠️  PART 2: 8-CLASS PHYSICAL OBSTACLE & SABOTAGE DETECTOR (YOLO11m)
+--------------------------------------------------------------------------------
+[+] Loading Custom YOLO11m Obstacle Detector from: models/RailDrishti_Det_YOLO11m.pt
+[*] Running Ultralytics COCO Validation Evaluation...
+
+============================================================
+ 📊 YOLO11m 8-CLASS OBSTACLE DETECTION METRICS
+============================================================
+ • Mean Average Precision (mAP@50):     60.83%
+ • Mean Average Precision (mAP@50-95):  38.46%
+ • Precision (P):                       62.80%
+ • Recall (R):                          58.60%
+------------------------------------------------------------
+ Per-Class AP@50 Breakdown:
+   [0] Person      :  26.90% AP@50
+   [1] Car         :  28.29% AP@50
+   [2] Truck       :   4.32% AP@50
+   [3] Branch      :  36.24% AP@50
+   [4] IronRod     :  62.86% AP@50
+   [5] Boulder     :  43.06% AP@50
+   [6] Barrel      :  54.38% AP@50
+   [7] Jerrycan    :  51.60% AP@50
+============================================================
+
+--------------------------------------------------------------------------------
+ ⚡  PART 3: PRODUCTION ONNX ENGINE & LATENCY BENCHMARK
+--------------------------------------------------------------------------------
+[+] BiSeNetV2 Segmentation      : models/RailDrishti_Seg_BiSeNetV2.onnx (13.32 MB)
+    • Status: 100% Graph Verified ✅  |  Latency: 86.94 ms (11.5 FPS)
+[+] YOLO11m Obstacle Detector   : models/RailDrishti_Det_YOLO11m.onnx (77.06 MB)
+    • Status: 100% Graph Verified ✅  |  Latency: 380.91 ms ( 2.6 FPS)
+================================================================================

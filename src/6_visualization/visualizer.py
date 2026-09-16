@@ -11,6 +11,7 @@ Design Philosophy:
 """
 
 from typing import List, Tuple, Dict, Optional
+from datetime import datetime
 import cv2
 import numpy as np
 import importlib
@@ -45,70 +46,66 @@ class DrishtiVisualizer:
         canvas: np.ndarray,
         overall_status: str,
         fps: float,
-        sensor_mode: str,
-        weather_status: str,
-        hazards: List[HazardAssessment]
+        sensor_mode: str = "",
+        weather_status: str = "",
+        hazards: Optional[List[HazardAssessment]] = None
     ) -> np.ndarray:
         """
-        Draws a dynamically scaled, responsive top status header with zero text overlap.
+        Draws a large, high-visibility, responsive top status header with Date, Time, and FPS.
         """
         h, w = canvas.shape[:2]
-        
-        # Responsive scale factor based on width (normalized against 1280px standard)
-        scale = float(np.clip(w / 1280.0, 0.45, 1.25))
-        
-        # Dynamic Header Height
-        header_h = int(np.clip(54 * scale + 24, 42, 80))
 
-        # 1. Header Background Strip with Subtle Gradient Border
+        # Generous scale factor for high visibility
+        scale = float(np.clip(w / 1280.0, 0.60, 1.40))
+
+        # Dynamic Header Height (generous height for clean presentation)
+        header_h = int(np.clip(68 * scale + 24, 60, 110))
+
+        # 1. Header Background Strip with Accent Border
         overlay = canvas.copy()
         cv2.rectangle(overlay, (0, 0), (w, header_h), self.HUD_BG, -1)
-        cv2.line(overlay, (0, header_h - 1), (w, header_h - 1), (50, 65, 80), 1)
-        cv2.line(overlay, (0, header_h), (w, header_h), (75, 95, 120), 2)
-        cv2.addWeighted(overlay, 0.92, canvas, 0.08, 0, canvas)
+        cv2.line(overlay, (0, header_h - 1), (w, header_h - 1), (55, 70, 90), 1)
+        cv2.line(overlay, (0, header_h), (w, header_h), (85, 110, 140), 2)
+        cv2.addWeighted(overlay, 0.90, canvas, 0.10, 0, canvas)
 
         # Font scales
-        brand_font_scale = float(np.clip(0.70 * scale, 0.38, 0.85))
-        badge_font_scale = float(np.clip(0.62 * scale, 0.34, 0.70))
-        telemetry_font_scale = float(np.clip(0.48 * scale, 0.30, 0.55))
+        brand_font_scale = float(np.clip(0.85 * scale, 0.52, 1.10))
+        badge_font_scale = float(np.clip(0.72 * scale, 0.44, 0.90))
+        telemetry_font_scale = float(np.clip(0.58 * scale, 0.36, 0.75))
 
         mid_y = header_h // 2
 
-        # 2. Left Zone: Status LED + "DRISHTI KAVACH"
-        lamp_radius = max(3, int(6 * scale))
-        lamp_x = max(10, int(20 * scale))
+        # 2. Left Zone: Status LED + "DRISHTI KAVACH" (Comfortably inset from left edge)
+        lamp_radius = max(5, int(7 * scale))
+        lamp_x = max(32, int(46 * scale))
         lamp_col = self.COLOR_CRITICAL if overall_status == "CRITICAL" else (
             self.COLOR_WARNING if overall_status == "WARNING" else self.COLOR_SAFE
         )
+        # Clean solid status dot without white outline
         cv2.circle(canvas, (lamp_x, mid_y), lamp_radius, lamp_col, -1, cv2.LINE_AA)
-        cv2.circle(canvas, (lamp_x, mid_y), lamp_radius + 2, (255, 255, 255), 1, cv2.LINE_AA)
 
         brand_text = "DRISHTI KAVACH"
-        brand_x = lamp_x + lamp_radius + max(6, int(10 * scale))
-        (bw, bh), _ = cv2.getTextSize(brand_text, cv2.FONT_HERSHEY_DUPLEX, brand_font_scale, 1)
+        brand_x = lamp_x + lamp_radius + max(8, int(14 * scale))
+        (bw, bh), _ = cv2.getTextSize(brand_text, cv2.FONT_HERSHEY_DUPLEX, brand_font_scale, 2)
         brand_y = mid_y + bh // 2
         cv2.putText(canvas, brand_text, (brand_x, brand_y),
-                    cv2.FONT_HERSHEY_DUPLEX, brand_font_scale, (0, 235, 255), 1, cv2.LINE_AA)
-        left_boundary = brand_x + bw + max(12, int(16 * scale))
+                    cv2.FONT_HERSHEY_DUPLEX, brand_font_scale, (0, 235, 255), 2, cv2.LINE_AA)
+        left_boundary = brand_x + bw + max(16, int(22 * scale))
 
-        # 3. Right Zone: Telemetry Metrics (FPS, Sensor, Optics)
-        if w >= 950:
-            telemetry_str = f"FPS: {fps:4.1f}  |  SENSOR: {sensor_mode}  |  OPTICS: {weather_status}"
-        elif w >= 680:
-            telemetry_str = f"FPS: {fps:4.1f} | {sensor_mode.split()[0]} | {weather_status}"
-        else:
-            telemetry_str = f"{fps:.1f} FPS"
+        # 3. Right Zone: Telemetry Metric (Fixed-Width FPS Slot)
+        telemetry_str = f"FPS: {fps:4.1f}"
 
         (rw, rh), _ = cv2.getTextSize(telemetry_str, cv2.FONT_HERSHEY_SIMPLEX, telemetry_font_scale, 1)
-        right_margin = max(10, int(16 * scale))
+        right_margin = max(14, int(20 * scale))
         rx = w - rw - right_margin
         ry = mid_y + rh // 2
         cv2.putText(canvas, telemetry_str, (rx, ry),
-                    cv2.FONT_HERSHEY_SIMPLEX, telemetry_font_scale, self.TEXT_MAIN, 1, cv2.LINE_AA)
-        right_boundary = rx - max(12, int(16 * scale))
+                    cv2.FONT_HERSHEY_SIMPLEX, telemetry_font_scale, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # 4. Center Zone: Dynamic Tactical Safety Alert Box
-        available_center_w = right_boundary - left_boundary
+        # 4. Center Zone: Static Centered Tactical Safety Alert Box (Locked to w // 2)
+        center_x = w // 2
+        fixed_slot_margin = max(bw + int(50 * scale), int(150 * scale))
+        available_center_w = w - (2 * fixed_slot_margin)
 
         if overall_status == "CRITICAL":
             box_bg = (0, 0, 185)
@@ -120,14 +117,14 @@ class DrishtiVisualizer:
         elif overall_status == "WARNING":
             box_bg = (0, 140, 205)
             box_border = (0, 220, 255)
-            full_text = "[ CAUTION : CLEARANCE ENVELOPE BREACH ]"
+            full_text = "[ CAUTION : NEAR TRACK ]"
             short_text = "[ CAUTION : NEAR TRACK ]"
             tiny_text = "[ CAUTION ]"
             text_color = (255, 255, 255)
         else:
             box_bg = (15, 70, 22)
             box_border = (40, 190, 55)
-            full_text = "[ TRACK STATUS : ALL CLEAR / NOMINAL ]"
+            full_text = "[ TRACK STATUS : ALL CLEAR ]"
             short_text = "[ TRACK CLEAR ]"
             tiny_text = "[ CLEAR ]"
             text_color = (100, 255, 120)
@@ -149,14 +146,13 @@ class DrishtiVisualizer:
         badge_w = min(int(chosen_tw + max(16, int(24 * scale))), available_center_w)
         badge_h = max(24, int(header_h * 0.62))
         
-        center_x = (left_boundary + right_boundary) // 2
         badge_x1 = center_x - badge_w // 2
         badge_y1 = (header_h - badge_h) // 2
         badge_x2 = badge_x1 + badge_w
         badge_y2 = badge_y1 + badge_h
 
-        # Only draw center box if there's reasonable space
-        if badge_w > 30 and badge_x1 >= left_boundary and badge_x2 <= right_boundary:
+        # Draw rock-solid center badge
+        if badge_w > 30:
             cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), box_bg, -1)
             cv2.rectangle(canvas, (badge_x1, badge_y1), (badge_x2, badge_y2), box_border, 1)
 
@@ -164,6 +160,31 @@ class DrishtiVisualizer:
             tx = badge_x1 + (badge_w - tw) // 2
             ty = badge_y1 + (badge_h + th) // 2 - 1
             cv2.putText(canvas, badge_text, (tx, ty), cv2.FONT_HERSHEY_DUPLEX, badge_font_scale, text_color, 1, cv2.LINE_AA)
+
+        return canvas
+
+    def draw_cctv_timestamp(self, canvas: np.ndarray) -> np.ndarray:
+        """Draws a minimal, non-bold CCTV-style date & time watermark in the bottom-right corner."""
+        h, w = canvas.shape[:2]
+        now_dt = datetime.now()
+        ts_str = now_dt.strftime("%d.%m.%Y | %H:%M:%S")
+
+        scale = float(np.clip(w / 1280.0, 0.55, 1.25))
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = float(np.clip(0.56 * scale, 0.40, 0.72))
+        thickness = 1
+        (tw, th), _ = cv2.getTextSize(ts_str, font, font_scale, thickness)
+
+        margin_x = int(18 * scale)
+        margin_y = int(16 * scale)
+        tx = w - tw - margin_x
+        ty = h - margin_y
+
+        if tx >= 0 and ty >= 0:
+            # Subtle dark drop-shadow for crisp legibility over light backgrounds
+            cv2.putText(canvas, ts_str, (tx + 1, ty + 1), font, font_scale, (10, 10, 10), 1, cv2.LINE_AA)
+            # Clean minimal white text
+            cv2.putText(canvas, ts_str, (tx, ty), font, font_scale, (240, 245, 250), 1, cv2.LINE_AA)
 
         return canvas
 
@@ -183,7 +204,8 @@ class DrishtiVisualizer:
         Renders full visualizer output:
         1. High-contrast track bed & rail lines masks
         2. Clean obstacle bounding boxes with subtle badge
-        3. Old-school sleek top HUD header
+        3. Top HUD header (Status + FPS)
+        4. Bottom-right CCTV timestamp watermark
         """
         h, w = frame_bgr.shape[:2]
         scale = float(np.clip(w / 1280.0, 0.45, 1.25))
@@ -252,5 +274,8 @@ class DrishtiVisualizer:
                 weather_status=weather_status,
                 hazards=hazards
             )
+
+        # 6. Render Embedded CCTV Timestamp Watermark
+        canvas = self.draw_cctv_timestamp(canvas)
 
         return canvas
