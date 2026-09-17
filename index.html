@@ -790,15 +790,49 @@
     opacity: 0.95;
   }
 
-  /* ── VIDEOS (SECTION 05): 1 PER ROW, NO TEXT, INFINITE LOOP ── */
+  /* ── VIDEOS (SECTION 05) ── */
   #videos {
     background: var(--off-white);
   }
 
-  .video-grid-1col {
+  .video-showcase-panel {
+    margin-top: 28px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    overflow: hidden;
+  }
+
+  .video-showcase-panel .video-card-clean {
+    border: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .video-showcase-info {
+    padding: 24px 28px;
+    background: var(--white);
+  }
+
+  .video-showcase-tag {
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .video-showcase-desc {
+    font-size: 13px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+
+  .video-grid-2col {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 32px;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
     margin-top: 24px;
   }
 
@@ -1374,6 +1408,11 @@
       gap: 16px;
     }
 
+    .video-grid-2col {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
     .station-visit-panel {
       grid-template-columns: 1fr;
     }
@@ -1798,17 +1837,34 @@
   </div>
 </section>
 
-<!-- VIDEOS (SECTION 05): 1 PER ROW, NO TEXT, INFINITE LOOP -->
+<!-- VIDEOS (SECTION 05) -->
 <section id="videos">
-  <div class="section-label">05 — Live Demonstrations (Infinite Loop)</div>
+  <div class="section-label">05 — Live Demonstrations</div>
   <h2 class="section-title fade-up">Real-Time Continuous<br>Inference Feeds</h2>
 
-  <div class="video-grid-1col fade-up">
+  <!-- 1.mp4 Showcase with Description -->
+  <div class="video-showcase-panel fade-up">
     <div class="video-card-clean">
-      <video src="assets/videos/1.mp4" autoplay loop muted playsinline controls preload="metadata"></video>
+      <video src="assets/videos/1.mp4" controls preload="metadata" playsinline></video>
+    </div>
+    <div class="video-showcase-info">
+      <div class="video-showcase-tag">
+        <span style="display:inline-block; width:6px; height:6px; background:var(--text); border-radius:50%;"></span>
+        Locomotive Camera Test
+      </div>
+      <p class="video-showcase-desc">
+        We tried running our final built machine learning model on a locomotive camera test video, and this was the result — performing real-time track semantic segmentation, corridor clearance boundary estimation, and active rail collision zone prediction.
+      </p>
+    </div>
+  </div>
+
+  <!-- 2.mp4 and 3.mp4 Side-by-Side -->
+  <div class="video-grid-2col fade-up">
+    <div class="video-card-clean">
+      <video src="assets/videos/2.mp4" controls preload="metadata" playsinline></video>
     </div>
     <div class="video-card-clean">
-      <video src="assets/videos/2.mp4" autoplay loop muted playsinline controls preload="metadata"></video>
+      <video src="assets/videos/3.mp4" controls preload="metadata" playsinline></video>
     </div>
   </div>
 </section>
