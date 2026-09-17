@@ -32,7 +32,6 @@ test_images_night/
 *.tar
 *.tar.gz
 *.rar
-*.mp4
 *.avi
 *.mov
 *.mkv

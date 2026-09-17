@@ -6,7 +6,7 @@ CLI Flags & Usage:
   --conf FLOAT     : Confidence threshold for obstacle detection (default: 0.35)
   --imgsz INT      : Inference resolution for obstacle detection (default: 1024)
   --weather STR    : Weather defogging mode: 'off', 'auto', 'clahe', 'dcp' (default: 'off')
-  --save           : Save annotated output stream/images to outputs/inference_results/
+  --save           : Save annotated output stream to camera_captures/main-videos/
   --no-view        : Run in headless mode without opening GUI window
 
 Interactive Keyboard Controls (in GUI Window):
@@ -227,13 +227,13 @@ def run_inference(
     save_output: bool = False,
     show_view: bool = True
 ):
+    video_dir = os.path.join("camera_captures", "main-videos")
     snapshot_dir = os.path.join("camera_captures", "main")
-    output_dir = "outputs/inference_results"
     reports_dir = os.path.join("outputs", "reports")
     os.makedirs(snapshot_dir, exist_ok=True)
     os.makedirs(reports_dir, exist_ok=True)
     if save_output:
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(video_dir, exist_ok=True)
 
     # Initialize Engine (Default 1024 full resolution inference)
     engine = DrishtiEngine(
@@ -265,8 +265,11 @@ def run_inference(
         print(f"  • Frame Rate:       {telemetry['fps']:.1f} FPS")
 
         if save_output:
-            out_name = f"result_{os.path.basename(source)}"
-            out_path = os.path.join(output_dir, out_name)
+            date_str = start_dt.strftime("%d-%m-%Y")
+            time_str = start_dt.strftime("%H-%M-%S")
+            sub_sec = f"{start_dt.microsecond // 10000:02d}"
+            out_name = f"main_{date_str}_{time_str}_{sub_sec}.jpg"
+            out_path = os.path.join(snapshot_dir, out_name)
             cv2.imwrite(out_path, rendered)
             print(f"[+] Saved result to: {out_path}")
 
@@ -301,6 +304,7 @@ def run_inference(
         return
 
     # 2. Asynchronous Threaded Camera / Video Stream
+    is_live_cam = str(source).isdigit() or str(source).lower().startswith("rtsp://") or str(source).lower().startswith("http://")
     cap = ThreadedCamera(source)
 
     if not cap.isOpened():
@@ -308,17 +312,24 @@ def run_inference(
         return
 
     writer = None
-    if save_output:
-        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps_in = cap.get(cv2.CAP_PROP_FPS)
-        fps_in = fps_in if fps_in > 0 else 30.0
+    out_video_path = None
+    target_fps = 30.0
+    total_written_frames = 0
+    video_start_time = None
 
-        base_src_name = Path(source).stem if not str(source).isdigit() else f"stream_{int(time.time())}"
-        out_video_path = os.path.join(output_dir, f"result_{base_src_name}.mp4")
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(out_video_path, fourcc, fps_in, (w, h))
-        print(f"[+] Output video will be saved to: {out_video_path}")
+    if save_output:
+        session_now = datetime.now()
+        date_str = session_now.strftime("%d-%m-%Y")
+        time_str = session_now.strftime("%H-%M-%S")
+        sub_sec = f"{session_now.microsecond // 10000:02d}"
+        video_filename = f"main_{date_str}_{time_str}_{sub_sec}.mp4"
+        out_video_path = os.path.join(video_dir, video_filename)
+
+        fps_in = cap.get(cv2.CAP_PROP_FPS)
+        if not is_live_cam and fps_in > 0:
+            target_fps = fps_in
+        else:
+            target_fps = 30.0  # Standard smooth playback rate for live streams
 
     win_name = "Drishti Kavach - Railway Clearance ATP"
     if show_view:
@@ -330,7 +341,6 @@ def run_inference(
     print(" • [Q] / [ESC]   : Quit Stream")
     print("=" * 65 + "\n")
 
-    is_live_cam = str(source).isdigit()
     last_report_time = 0.0
     prev_status = None
 
@@ -386,8 +396,25 @@ def run_inference(
                 print(log_line)
                 log_entries.append(log_line)
 
-            if writer is not None:
-                writer.write(rendered)
+            if save_output:
+                if writer is None:
+                    h_out, w_out = rendered.shape[:2]
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    writer = cv2.VideoWriter(out_video_path, fourcc, target_fps, (w_out, h_out))
+                    video_start_time = time.time()
+                    print(f"[+] Output video recording started: {out_video_path} ({target_fps:.1f} FPS)")
+
+                if is_live_cam:
+                    # Synchronize video frames to wall-clock time for 1:1 real-time playback speed
+                    elapsed_time = time.time() - video_start_time
+                    expected_frames = max(1, int(elapsed_time * target_fps))
+                    repeats = max(1, expected_frames - total_written_frames)
+                    for _ in range(repeats):
+                        writer.write(rendered)
+                    total_written_frames += repeats
+                else:
+                    writer.write(rendered)
+                    total_written_frames += 1
 
             if show_view:
                 cv2.imshow(win_name, rendered)
@@ -439,7 +466,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf", type=float, default=0.35, help="Obstacle detection confidence threshold (default: 0.35)")
     parser.add_argument("--imgsz", type=int, default=640, help="Inference resolution (default: 640)")
     parser.add_argument("--weather", type=str, default="off", choices=["off", "auto", "clahe", "dcp"], help="Weather defogging (default: off)")
-    parser.add_argument("--save", action="store_true", help="Save annotated output stream to outputs/inference_results/")
+    parser.add_argument("--save", action="store_true", help="Save annotated output video to camera_captures/main-videos/")
     parser.add_argument("--no-view", action="store_true", help="Headless mode without GUI window")
 
     args = parser.parse_args()
@@ -452,3 +479,4 @@ if __name__ == "__main__":
         save_output=args.save,
         show_view=not args.no_view
     )
+
