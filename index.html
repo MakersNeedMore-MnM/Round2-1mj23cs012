@@ -748,7 +748,105 @@
     border-bottom: none;
   }
 
-  /* ── GALLERY (SECTION 04): SUBGROUPS ── */
+  /* ── HARDWARE TESTBED (SECTION 04) ── */
+  #hardware {
+    background: var(--off-white);
+    border-top: 1px solid var(--border);
+  }
+
+  .hardware-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 32px;
+  }
+
+  .hardware-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hardware-card:hover {
+    border-color: var(--text);
+    transform: translateY(-2px);
+  }
+
+  .hardware-card-wide {
+    grid-column: 1 / -1;
+  }
+
+  .hardware-media {
+    background: #000;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-height: 380px;
+  }
+
+  .hardware-card-wide .hardware-media {
+    max-height: 460px;
+  }
+
+  .hardware-media img {
+    width: 100%;
+    height: 100%;
+    max-height: 380px;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.2s ease;
+  }
+
+  .hardware-card-wide .hardware-media img {
+    max-height: 460px;
+    object-fit: contain;
+  }
+
+  .hardware-card:hover .hardware-media img {
+    opacity: 0.95;
+  }
+
+  .hardware-info {
+    padding: 24px;
+    background: var(--white);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  .hardware-tag {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hardware-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .hardware-desc {
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--muted);
+  }
+
+  /* ── GALLERY (SECTION 05): SUBGROUPS ── */
   #gallery {
     background: var(--white);
   }
@@ -1438,6 +1536,15 @@
       grid-template-columns: 1fr;
     }
 
+    .hardware-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .hardware-card-wide {
+      grid-column: auto;
+    }
+
     .gallery-grid-2col {
       grid-template-columns: 1fr;
       gap: 16px;
@@ -1495,6 +1602,7 @@
     <li><a href="#about" class="nav-link-item">About</a></li>
     <li><a href="#pipeline" class="nav-link-item">Pipeline</a></li>
     <li><a href="#taxonomy" class="nav-link-item">Taxonomy</a></li>
+    <li><a href="#hardware" class="nav-link-item">Hardware</a></li>
     <li><a href="#gallery" class="nav-link-item">Gallery</a></li>
     <li><a href="#videos" class="nav-link-item">Videos</a></li>
     <li><a href="#people" class="nav-link-item">Team</a></li>
@@ -1839,9 +1947,69 @@
   </table>
 </section>
 
-<!-- GALLERY (SECTION 04) -->
+<!-- HARDWARE TESTBED (SECTION 04) -->
+<section id="hardware" class="grid-bg">
+  <div class="section-label">04 — Physical Prototyping &amp; Empirical Model Selection</div>
+  <h2 class="section-title fade-up">Whitefield Station Miniature Testbed<br>&amp; Architecture Selection</h2>
+  <p class="section-desc fade-up">
+    To empirically stress-test our v1.0 perception engine before scaling to full-track datasets, we engineered a high-fidelity physical miniature scale reproduction of Whitefield Railway Station. This controlled testbed enabled rigorous comparative evaluation across multiple candidate vision models under simulated lighting and physical obstruction scenarios to select the optimal architecture blend.
+  </p>
+
+  <!-- Hardware Feature Cards Grid -->
+  <div class="hardware-grid fade-up">
+    <div class="hardware-card" onclick="openModal('assets/hardware/1a.jpeg')">
+      <div class="hardware-media">
+        <img src="assets/hardware/1a.jpeg" alt="Whitefield Station Miniature Scale Model - Full Junction Setup" loading="lazy">
+      </div>
+      <div class="hardware-info">
+        <div class="hardware-tag">
+          <span style="display:inline-block; width:6px; height:6px; background:var(--text); border-radius:50%;"></span>
+          01 / Physical Testbed
+        </div>
+        <div class="hardware-title">Whitefield Miniature Scale Junction</div>
+        <p class="hardware-desc">
+          Custom physical fabrication recreating multi-track junctions, sleeper geometry, platforms, and switch turnouts for continuous sensor prototyping, lens calibration, and camera mounting optimization.
+        </p>
+      </div>
+    </div>
+
+    <div class="hardware-card" onclick="openModal('assets/hardware/1b.jpeg')">
+      <div class="hardware-media">
+        <img src="assets/hardware/1b.jpeg" alt="Whitefield Scale Model - Perspective Calibration & Track Layout" loading="lazy">
+      </div>
+      <div class="hardware-info">
+        <div class="hardware-tag">
+          <span style="display:inline-block; width:6px; height:6px; background:var(--text); border-radius:50%;"></span>
+          02 / Model v1.0 Stress Testing
+        </div>
+        <div class="hardware-title">Controlled Optical Obstacle Evaluation</div>
+        <p class="hardware-desc">
+          Live deployment of our v1.0 perception model under simulated physical foreign object debris, ballast displacement, and rapid rolling stock transit to test detection robustness.
+        </p>
+      </div>
+    </div>
+
+    <div class="hardware-card hardware-card-wide" onclick="openModal('assets/hardware/2.png')">
+      <div class="hardware-media">
+        <img src="assets/hardware/2.png" alt="Candidate Model Comparison & Neural Architecture Selection" loading="lazy">
+      </div>
+      <div class="hardware-info">
+        <div class="hardware-tag">
+          <span style="display:inline-block; width:6px; height:6px; background:#2e8b57; border-radius:50%;"></span>
+          03 / Architecture Selection &amp; Dataset Scaling
+        </div>
+        <div class="hardware-title">Empirical Model Selection &amp; Full-Scale Training</div>
+        <p class="hardware-desc">
+          Systematic multi-model evaluation across candidate backbones to pick out and benchmark which architecture fits best (balancing latency, memory footprint, and edge compute efficiency) before committing to full-scale training on massive railway datasets.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY (SECTION 05) -->
 <section id="gallery">
-  <div class="section-label">04 — Visual Output &amp; Field Records</div>
+  <div class="section-label">05 — Visual Output &amp; Field Records</div>
   <h2 class="section-title fade-up">Perception &amp;<br>Spatial Overlays</h2>
 
   <!-- Subgroup 1: Drishti Kavach System with HUD Overlay (Images 1 - 8) -->
@@ -1907,9 +2075,9 @@
   </div>
 </section>
 
-<!-- VIDEOS (SECTION 05) -->
+<!-- VIDEOS (SECTION 06) -->
 <section id="videos">
-  <div class="section-label">05 — Live Demonstrations</div>
+  <div class="section-label">06 — Live Demonstrations</div>
   <h2 class="section-title fade-up">Real-Time Continuous<br>Inference Feeds</h2>
 
   <!-- 1.mp4 Showcase with Description -->
@@ -1939,9 +2107,9 @@
   </div>
 </section>
 
-<!-- PEOPLE (SECTION 06): ALVIN SONNY AS TEAM LEADER -->
+<!-- PEOPLE (SECTION 07): ALVIN SONNY AS TEAM LEADER -->
 <section id="people">
-  <div class="section-label">06 — Acknowledgement &amp; Engineering Team</div>
+  <div class="section-label">07 — Acknowledgement &amp; Engineering Team</div>
   <h2 class="section-title fade-up">Team</h2>
   <p class="section-desc fade-up">
     Engineered by Team Git Commit at MVJ College of Engineering. Dedicated to advancing railway AI safety for India.
