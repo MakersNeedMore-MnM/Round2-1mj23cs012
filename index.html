@@ -748,16 +748,51 @@
     border-bottom: none;
   }
 
-  /* ── GALLERY (SECTION 04): 2 PER ROW, NO TEXT, DISPLAY WHOLE AS IS ── */
+  /* ── GALLERY (SECTION 04): SUBGROUPS ── */
   #gallery {
     background: var(--white);
+  }
+
+  .gallery-subgroup {
+    margin-top: 40px;
+  }
+
+  .gallery-subgroup:first-of-type {
+    margin-top: 28px;
+  }
+
+  .gallery-subgroup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .gallery-subgroup-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .gallery-subgroup-tag {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
   }
 
   .gallery-grid-2col {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 20px;
-    margin-top: 24px;
   }
 
   .gallery-card-clean {
@@ -1804,35 +1839,70 @@
   </table>
 </section>
 
-<!-- GALLERY (SECTION 04): 2 PER ROW, NO TEXT, DISPLAY WHOLE AS IS -->
+<!-- GALLERY (SECTION 04) -->
 <section id="gallery">
-  <div class="section-label">04 — Visual Output &amp; Inference Results</div>
+  <div class="section-label">04 — Visual Output &amp; Field Records</div>
   <h2 class="section-title fade-up">Perception &amp;<br>Spatial Overlays</h2>
 
-  <div class="gallery-grid-2col fade-up">
-    <div class="gallery-card-clean" onclick="openModal('assets/images/1.jpg')">
-      <img src="assets/images/1.jpg" alt="Inference Result 1" loading="lazy">
+  <!-- Subgroup 1: Drishti Kavach System with HUD Overlay (Images 1 - 8) -->
+  <div class="gallery-subgroup fade-up">
+    <div class="gallery-subgroup-header">
+      <h3 class="gallery-subgroup-title">
+        <span style="display:inline-block; width:6px; height:6px; background:var(--text); border-radius:50%;"></span>
+        Drishti Kavach System with HUD Overlay
+      </h3>
+      <span class="gallery-subgroup-tag">08 Telemetry Captures · BiSeNetV2 + YOLO11m HUD</span>
     </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/2.jpg')">
-      <img src="assets/images/2.jpg" alt="Inference Result 2" loading="lazy">
+    <div class="gallery-grid-2col">
+      <div class="gallery-card-clean" onclick="openModal('assets/images/1.jpg')">
+        <img src="assets/images/1.jpg" alt="Drishti Kavach HUD Overlay 1" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/2.jpg')">
+        <img src="assets/images/2.jpg" alt="Drishti Kavach HUD Overlay 2" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/3.jpg')">
+        <img src="assets/images/3.jpg" alt="Drishti Kavach HUD Overlay 3" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/4.jpg')">
+        <img src="assets/images/4.jpg" alt="Drishti Kavach HUD Overlay 4" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/5.jpg')">
+        <img src="assets/images/5.jpg" alt="Drishti Kavach HUD Overlay 5" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/6.jpg')">
+        <img src="assets/images/6.jpg" alt="Drishti Kavach HUD Overlay 6" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/7.jpg')">
+        <img src="assets/images/7.jpg" alt="Drishti Kavach HUD Overlay 7" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/8.jpg')">
+        <img src="assets/images/8.jpg" alt="Drishti Kavach HUD Overlay 8" loading="lazy">
+      </div>
     </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/3.jpg')">
-      <img src="assets/images/3.jpg" alt="Inference Result 3" loading="lazy">
+  </div>
+
+  <!-- Subgroup 2: On-Site Railway Station Field Inspection (Images 9 - 12) -->
+  <div class="gallery-subgroup fade-up">
+    <div class="gallery-subgroup-header">
+      <h3 class="gallery-subgroup-title">
+        <span style="display:inline-block; width:6px; height:6px; background:#2e8b57; border-radius:50%;"></span>
+        On-Site Railway Station Field Visit &amp; Location Proof
+      </h3>
+      <span class="gallery-subgroup-tag">04 On-Ground Records · South Western Railways Visit</span>
     </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/4.jpg')">
-      <img src="assets/images/4.jpg" alt="Inference Result 4" loading="lazy">
-    </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/5.jpg')">
-      <img src="assets/images/5.jpg" alt="Inference Result 5" loading="lazy">
-    </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/6.jpg')">
-      <img src="assets/images/6.jpg" alt="Inference Result 6" loading="lazy">
-    </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/7.jpg')">
-      <img src="assets/images/7.jpg" alt="Inference Result 7" loading="lazy">
-    </div>
-    <div class="gallery-card-clean" onclick="openModal('assets/images/8.jpg')">
-      <img src="assets/images/8.jpg" alt="Inference Result 8" loading="lazy">
+    <div class="gallery-grid-2col">
+      <div class="gallery-card-clean" onclick="openModal('assets/images/9.png')">
+        <img src="assets/images/9.png" alt="On-Site Railway Station Field Visit 9" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/10.png')">
+        <img src="assets/images/10.png" alt="On-Site Railway Station Field Visit 10" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/11.png')">
+        <img src="assets/images/11.png" alt="On-Site Railway Station Field Visit 11" loading="lazy">
+      </div>
+      <div class="gallery-card-clean" onclick="openModal('assets/images/12.png')">
+        <img src="assets/images/12.png" alt="On-Site Railway Station Field Visit 12" loading="lazy">
+      </div>
     </div>
   </div>
 </section>
