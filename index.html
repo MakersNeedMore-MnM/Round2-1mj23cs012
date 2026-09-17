@@ -8,6 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+<script>
+  // Immediately disable browser automatic scroll restoration and clear anchor hash
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  window.scrollTo(0, 0);
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -2015,9 +2025,22 @@
     history.scrollRestoration = 'manual';
   }
   window.addEventListener('beforeunload', () => {
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     window.scrollTo(0, 0);
   });
   window.addEventListener('DOMContentLoaded', () => {
+    window.scrollTo(0, 0);
+    const hero = document.getElementById('hero');
+    if (hero) {
+      hero.scrollIntoView({ behavior: 'instant', block: 'start' });
+    }
+  });
+  window.addEventListener('load', () => {
+    window.scrollTo(0, 0);
+  });
+  window.addEventListener('pageshow', () => {
     window.scrollTo(0, 0);
   });
 </script>
